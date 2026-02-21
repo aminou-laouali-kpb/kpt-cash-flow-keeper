@@ -1,12 +1,17 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit, Loader2, Trash2, Download } from "lucide-react";
+import { ArrowLeft, Edit, Loader2, Trash2, Download, PenTool, Send, CheckCircle, Clock, XCircle } from "lucide-react";
 import { usePayment, usePayments } from "@/hooks/usePayments";
 import { useSettings } from "@/hooks/useSettings";
+import { usePaymentSignatures, useSignatureRequests, useSignatureActions } from "@/hooks/useSignatures";
 import { StatusBadge } from "@/components/StatusBadge";
 import { generatePaymentPDF } from "@/lib/generatePaymentPDF";
+import { SignatureDialog } from "@/components/SignatureDialog";
+import { SendSignatureLink } from "@/components/SendSignatureLink";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { supabase } from "@/integrations/supabase/client";
 
 const categoryLabels: Record<string, string> = {
   fournitures: "Fournitures", transport: "Transport", restauration: "Restauration",
@@ -36,6 +41,12 @@ export default function PaiementDetail() {
   const { data: payment, isLoading } = usePayment(id);
   const { deletePayment } = usePayments();
   const { settings } = useSettings();
+  const { data: signatures = [] } = usePaymentSignatures(id);
+  const { data: requests = [] } = useSignatureRequests(id);
+  const { createSignature, createSignatureRequest } = useSignatureActions();
+
+  const [signDialogOpen, setSignDialogOpen] = useState(false);
+  const [sendLinkOpen, setSendLinkOpen] = useState(false);
 
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (!payment) return <div className="text-center py-12 text-muted-foreground">Paiement introuvable</div>;
@@ -43,6 +54,30 @@ export default function PaiementDetail() {
   const handleDelete = async () => {
     await deletePayment(payment.id);
     navigate("/paiements");
+  };
+
+  const beneficiaireSig = signatures.find(s => s.signer_type === "beneficiaire" && s.is_valid);
+  const pendingRequest = requests.find(r => r.status === "pending");
+
+  const handleOnSiteSign = async (name: string, dataUrl: string) => {
+    // Upload signature image
+    const fileName = `signatures/beneficiaire_${payment.id}_${Date.now()}.png`;
+    const blob = await (await fetch(dataUrl)).blob();
+    const { error: uploadError } = await supabase.storage.from("kpt-files").upload(fileName, blob, { contentType: "image/png" });
+    if (uploadError) throw uploadError;
+    const { data: urlData } = supabase.storage.from("kpt-files").getPublicUrl(fileName);
+
+    await createSignature({
+      payment_id: payment.id,
+      signer_type: "beneficiaire",
+      signer_name: name,
+      signature_image_url: urlData.publicUrl,
+    });
+  };
+
+  const handleCreateRequest = async (sentVia: string) => {
+    const result = await createSignatureRequest({ payment_id: payment.id, sent_via: sentVia });
+    return { token: result.token };
   };
 
   return (
@@ -109,11 +144,89 @@ export default function PaiementDetail() {
         </CardContent>
       </Card>
 
+      {/* Signatures Section */}
+      <Card>
+        <CardHeader><CardTitle className="text-lg">Signatures</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Président */}
+            <div className="border rounded-lg p-4 text-center space-y-2">
+              <p className="text-sm font-medium">{settings?.president_fonction || "Président"}</p>
+              <p className="text-xs text-muted-foreground">{settings?.president_nom || "—"}</p>
+              {settings?.president_signature_url ? (
+                <img src={settings.president_signature_url} alt="Signature Président" className="h-16 mx-auto object-contain" />
+              ) : (
+                <div className="h-16 flex items-center justify-center text-muted-foreground text-xs">Non configurée</div>
+              )}
+            </div>
+
+            {/* Bénéficiaire */}
+            <div className="border rounded-lg p-4 text-center space-y-2">
+              <p className="text-sm font-medium">Bénéficiaire</p>
+              <p className="text-xs text-muted-foreground">{payment.beneficiaire_nom}</p>
+              {beneficiaireSig ? (
+                <>
+                  <img src={beneficiaireSig.signature_image_url || ""} alt="Signature" className="h-16 mx-auto object-contain" />
+                  <div className="flex items-center justify-center gap-1 text-xs text-green-600">
+                    <CheckCircle className="h-3 w-3" /> Signé
+                  </div>
+                </>
+              ) : pendingRequest ? (
+                <div className="h-16 flex flex-col items-center justify-center gap-1">
+                  <Clock className="h-5 w-5 text-amber-500" />
+                  <span className="text-xs text-muted-foreground">En attente</span>
+                </div>
+              ) : (
+                <div className="h-16 flex items-center justify-center text-muted-foreground text-xs">Non signé</div>
+              )}
+            </div>
+
+            {/* Trésorière */}
+            <div className="border rounded-lg p-4 text-center space-y-2">
+              <p className="text-sm font-medium">{settings?.tresoriere_fonction || "Trésorière"}</p>
+              <p className="text-xs text-muted-foreground">{settings?.tresoriere_nom || "—"}</p>
+              {settings?.tresoriere_signature_url ? (
+                <img src={settings.tresoriere_signature_url} alt="Signature Trésorière" className="h-16 mx-auto object-contain" />
+              ) : (
+                <div className="h-16 flex items-center justify-center text-muted-foreground text-xs">Non configurée</div>
+              )}
+            </div>
+          </div>
+
+          {!beneficiaireSig && (
+            <div className="flex gap-3 pt-2">
+              <Button size="sm" onClick={() => setSignDialogOpen(true)}>
+                <PenTool className="h-4 w-4 mr-1" /> Signer sur place
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setSendLinkOpen(true)}>
+                <Send className="h-4 w-4 mr-1" /> Envoyer lien de signature
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="flex gap-3">
         <Button variant="outline" onClick={() => payment && settings && generatePaymentPDF(payment, settings, (payment as any).projects?.nom)}>
           <Download className="h-4 w-4 mr-2" /> Télécharger PDF
         </Button>
       </div>
+
+      <SignatureDialog
+        open={signDialogOpen}
+        onOpenChange={setSignDialogOpen}
+        beneficiaireName={payment.beneficiaire_nom}
+        onSign={handleOnSiteSign}
+      />
+
+      <SendSignatureLink
+        open={sendLinkOpen}
+        onOpenChange={setSendLinkOpen}
+        paymentId={payment.id}
+        beneficiaireEmail={payment.beneficiaire_email}
+        beneficiaireTelephone={payment.beneficiaire_telephone}
+        onCreateRequest={handleCreateRequest}
+      />
     </div>
   );
 }
