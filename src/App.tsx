@@ -15,6 +15,7 @@ import PaiementForm from "./pages/PaiementForm";
 import PaiementDetail from "./pages/PaiementDetail";
 import Comptabilite from "./pages/Comptabilite";
 import Parametres from "./pages/Parametres";
+import SignaturePage from "./pages/SignaturePage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -60,6 +61,7 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
+            <Route path="/signer/:token" element={<SignaturePage />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/projets" element={<ProtectedRoute><Projets /></ProtectedRoute>} />
             <Route path="/projets/nouveau" element={<ProtectedRoute><ProjetForm /></ProtectedRoute>} />
