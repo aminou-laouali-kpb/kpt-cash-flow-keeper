@@ -21,6 +21,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import kptLogo from "@/assets/Cachet_KPT.png";
 
 const menuItems = [
   { title: "Tableau de bord", url: "/", icon: LayoutDashboard },
@@ -37,12 +38,10 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-bold text-lg">
-            K
-          </div>
+          <img src={kptLogo} alt="Logo KPT" className="h-10 w-10 rounded-lg object-contain" />
           <div className="flex flex-col">
             <span className="text-sm font-semibold text-sidebar-foreground">KPT</span>
-            <span className="text-xs text-sidebar-foreground/60">Karaté Pour Tous</span>
+            <span className="text-xs text-sidebar-foreground/60">Karatou Pour Tous</span>
           </div>
         </div>
       </SidebarHeader>
