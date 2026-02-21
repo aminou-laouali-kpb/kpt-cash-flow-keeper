@@ -14,6 +14,260 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          entity_id: string
+          entity_type: string
+          id: string
+          performed_by: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json | null
+          entity_id: string
+          entity_type: string
+          id?: string
+          performed_by?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          performed_by?: string | null
+        }
+        Relationships: []
+      }
+      payment_documents: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_type: string | null
+          file_url: string
+          id: string
+          payment_id: string
+          type_piece: Database["public"]["Enums"]["document_type"]
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_type?: string | null
+          file_url: string
+          id?: string
+          payment_id: string
+          type_piece?: Database["public"]["Enums"]["document_type"]
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_type?: string | null
+          file_url?: string
+          id?: string
+          payment_id?: string
+          type_piece?: Database["public"]["Enums"]["document_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_documents_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_signatures: {
+        Row: {
+          created_at: string
+          id: string
+          ip_address: string | null
+          is_valid: boolean
+          payment_id: string
+          signature_image_url: string | null
+          signed_at: string | null
+          signer_name: string | null
+          signer_type: Database["public"]["Enums"]["signer_type"]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          is_valid?: boolean
+          payment_id: string
+          signature_image_url?: string | null
+          signed_at?: string | null
+          signer_name?: string | null
+          signer_type: Database["public"]["Enums"]["signer_type"]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          is_valid?: boolean
+          payment_id?: string
+          signature_image_url?: string | null
+          signed_at?: string | null
+          signer_name?: string | null
+          signer_type?: Database["public"]["Enums"]["signer_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_signatures_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_versions: {
+        Row: {
+          data: Json
+          fields_changed: string[] | null
+          id: string
+          modification_reason: string | null
+          modified_at: string
+          modified_by: string | null
+          payment_id: string
+          signature_invalidated: boolean
+          version_number: number
+        }
+        Insert: {
+          data: Json
+          fields_changed?: string[] | null
+          id?: string
+          modification_reason?: string | null
+          modified_at?: string
+          modified_by?: string | null
+          payment_id: string
+          signature_invalidated?: boolean
+          version_number: number
+        }
+        Update: {
+          data?: Json
+          fields_changed?: string[] | null
+          id?: string
+          modification_reason?: string | null
+          modified_at?: string
+          modified_by?: string | null
+          payment_id?: string
+          signature_invalidated?: boolean
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_versions_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          autorisation_reference: string | null
+          beneficiaire_adresse: string | null
+          beneficiaire_email: string | null
+          beneficiaire_nom: string
+          beneficiaire_piece_numero: string | null
+          beneficiaire_piece_type: string | null
+          beneficiaire_telephone: string | null
+          categorie: Database["public"]["Enums"]["expense_category"]
+          commentaire: string | null
+          created_at: string
+          created_by: string
+          date_paiement: string
+          devise: string
+          id: string
+          lieu: string | null
+          mode_paiement: Database["public"]["Enums"]["payment_mode"]
+          montant: number
+          motif: string
+          motif_absence_recu: string | null
+          personne_effectuant: string | null
+          project_id: string | null
+          reference: string
+          reference_transaction: string | null
+          statut: Database["public"]["Enums"]["payment_status"]
+          type: Database["public"]["Enums"]["payment_type"]
+          updated_at: string
+          version_courante: number
+        }
+        Insert: {
+          autorisation_reference?: string | null
+          beneficiaire_adresse?: string | null
+          beneficiaire_email?: string | null
+          beneficiaire_nom: string
+          beneficiaire_piece_numero?: string | null
+          beneficiaire_piece_type?: string | null
+          beneficiaire_telephone?: string | null
+          categorie?: Database["public"]["Enums"]["expense_category"]
+          commentaire?: string | null
+          created_at?: string
+          created_by: string
+          date_paiement?: string
+          devise?: string
+          id?: string
+          lieu?: string | null
+          mode_paiement?: Database["public"]["Enums"]["payment_mode"]
+          montant: number
+          motif: string
+          motif_absence_recu?: string | null
+          personne_effectuant?: string | null
+          project_id?: string | null
+          reference: string
+          reference_transaction?: string | null
+          statut?: Database["public"]["Enums"]["payment_status"]
+          type?: Database["public"]["Enums"]["payment_type"]
+          updated_at?: string
+          version_courante?: number
+        }
+        Update: {
+          autorisation_reference?: string | null
+          beneficiaire_adresse?: string | null
+          beneficiaire_email?: string | null
+          beneficiaire_nom?: string
+          beneficiaire_piece_numero?: string | null
+          beneficiaire_piece_type?: string | null
+          beneficiaire_telephone?: string | null
+          categorie?: Database["public"]["Enums"]["expense_category"]
+          commentaire?: string | null
+          created_at?: string
+          created_by?: string
+          date_paiement?: string
+          devise?: string
+          id?: string
+          lieu?: string | null
+          mode_paiement?: Database["public"]["Enums"]["payment_mode"]
+          montant?: number
+          motif?: string
+          motif_absence_recu?: string | null
+          personne_effectuant?: string | null
+          project_id?: string | null
+          reference?: string
+          reference_transaction?: string | null
+          statut?: Database["public"]["Enums"]["payment_status"]
+          type?: Database["public"]["Enums"]["payment_type"]
+          updated_at?: string
+          version_courante?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -38,6 +292,51 @@ export type Database = {
           id?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          budget_previsionnel: number | null
+          code: string
+          created_at: string
+          created_by: string | null
+          date_debut: string | null
+          date_fin: string | null
+          description: string | null
+          id: string
+          nom: string
+          responsable: string | null
+          statut: Database["public"]["Enums"]["project_status"]
+          updated_at: string
+        }
+        Insert: {
+          budget_previsionnel?: number | null
+          code: string
+          created_at?: string
+          created_by?: string | null
+          date_debut?: string | null
+          date_fin?: string | null
+          description?: string | null
+          id?: string
+          nom: string
+          responsable?: string | null
+          statut?: Database["public"]["Enums"]["project_status"]
+          updated_at?: string
+        }
+        Update: {
+          budget_previsionnel?: number | null
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          date_debut?: string | null
+          date_fin?: string | null
+          description?: string | null
+          id?: string
+          nom?: string
+          responsable?: string | null
+          statut?: Database["public"]["Enums"]["project_status"]
+          updated_at?: string
         }
         Relationships: []
       }
@@ -104,6 +403,50 @@ export type Database = {
         }
         Relationships: []
       }
+      signature_requests: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          payment_id: string
+          refusal_reason: string | null
+          sent_via: string | null
+          signed_at: string | null
+          status: Database["public"]["Enums"]["signature_request_status"]
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          payment_id: string
+          refusal_reason?: string | null
+          sent_via?: string | null
+          signed_at?: string | null
+          status?: Database["public"]["Enums"]["signature_request_status"]
+          token?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          payment_id?: string
+          refusal_reason?: string | null
+          sent_via?: string | null
+          signed_at?: string | null
+          status?: Database["public"]["Enums"]["signature_request_status"]
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_requests_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -130,6 +473,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_payment_reference: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -140,6 +484,37 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "comptable" | "lecture_seule"
+      document_type: "facture" | "recu" | "autre"
+      expense_category:
+        | "fournitures"
+        | "transport"
+        | "restauration"
+        | "hebergement"
+        | "communication"
+        | "equipement_sportif"
+        | "location_salle"
+        | "honoraires"
+        | "frais_bancaires"
+        | "assurance"
+        | "formation"
+        | "evenement"
+        | "autre"
+      payment_mode:
+        | "especes"
+        | "virement"
+        | "cheque"
+        | "mobile_money"
+        | "carte_bancaire"
+        | "autre"
+      payment_status:
+        | "brouillon"
+        | "en_attente_signature"
+        | "signe"
+        | "a_re_signer"
+      payment_type: "recu_importe" | "fiche_manuelle"
+      project_status: "actif" | "cloture"
+      signature_request_status: "pending" | "signed" | "refused" | "expired"
+      signer_type: "president" | "tresoriere" | "beneficiaire"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -268,6 +643,40 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "comptable", "lecture_seule"],
+      document_type: ["facture", "recu", "autre"],
+      expense_category: [
+        "fournitures",
+        "transport",
+        "restauration",
+        "hebergement",
+        "communication",
+        "equipement_sportif",
+        "location_salle",
+        "honoraires",
+        "frais_bancaires",
+        "assurance",
+        "formation",
+        "evenement",
+        "autre",
+      ],
+      payment_mode: [
+        "especes",
+        "virement",
+        "cheque",
+        "mobile_money",
+        "carte_bancaire",
+        "autre",
+      ],
+      payment_status: [
+        "brouillon",
+        "en_attente_signature",
+        "signe",
+        "a_re_signer",
+      ],
+      payment_type: ["recu_importe", "fiche_manuelle"],
+      project_status: ["actif", "cloture"],
+      signature_request_status: ["pending", "signed", "refused", "expired"],
+      signer_type: ["president", "tresoriere", "beneficiaire"],
     },
   },
 } as const

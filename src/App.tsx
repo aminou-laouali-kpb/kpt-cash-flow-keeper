@@ -8,7 +8,11 @@ import { AppLayout } from "@/components/AppLayout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Projets from "./pages/Projets";
+import ProjetForm from "./pages/ProjetForm";
+import ProjetDetail from "./pages/ProjetDetail";
 import Paiements from "./pages/Paiements";
+import PaiementForm from "./pages/PaiementForm";
+import PaiementDetail from "./pages/PaiementDetail";
 import Comptabilite from "./pages/Comptabilite";
 import Parametres from "./pages/Parametres";
 import NotFound from "./pages/NotFound";
@@ -58,7 +62,13 @@ const App = () => (
             <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/projets" element={<ProtectedRoute><Projets /></ProtectedRoute>} />
+            <Route path="/projets/nouveau" element={<ProtectedRoute><ProjetForm /></ProtectedRoute>} />
+            <Route path="/projets/:id" element={<ProtectedRoute><ProjetDetail /></ProtectedRoute>} />
+            <Route path="/projets/:id/modifier" element={<ProtectedRoute><ProjetForm /></ProtectedRoute>} />
             <Route path="/paiements" element={<ProtectedRoute><Paiements /></ProtectedRoute>} />
+            <Route path="/paiements/nouveau" element={<ProtectedRoute><PaiementForm /></ProtectedRoute>} />
+            <Route path="/paiements/:id" element={<ProtectedRoute><PaiementDetail /></ProtectedRoute>} />
+            <Route path="/paiements/:id/modifier" element={<ProtectedRoute><PaiementForm /></ProtectedRoute>} />
             <Route path="/comptabilite" element={<ProtectedRoute><Comptabilite /></ProtectedRoute>} />
             <Route path="/parametres" element={<ProtectedRoute><Parametres /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
