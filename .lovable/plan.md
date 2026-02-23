@@ -1,66 +1,45 @@
 
 
-# Amelioration du PDF de fiche de paiement
+# Corrections: statut apres signature, format montant, cadres signature carres
 
-## Objectif
+## 3 modifications a effectuer
 
-Rendre le PDF professionnel avec le logo de l'association, les signatures reelles (President, Tresoriere, Beneficiaire), un formatage soigne des montants en "Francs CFA", et une mise en page structuree avec encadres et bordures.
+### 1. Mise a jour du statut du paiement apres signature via lien
 
-## Modifications prevues
+**Fichier** : `src/hooks/useSignatures.ts`
 
-### Fichier unique a modifier : `src/lib/generatePaymentPDF.ts`
+Dans la fonction `signViaToken` (ligne 144-175), ajouter apres la mise a jour de la `signature_request` :
 
-La fonction `generatePaymentPDF` sera reecrite avec les ameliorations suivantes :
+```typescript
+await supabase.from("payments").update({ statut: "signe" }).eq("id", input.payment_id);
+```
 
-**1. En-tete professionnel avec logo**
-- Charger le logo depuis `settings.logo_url` (ou utiliser l'asset local `Cachet_KPT.png` en fallback)
-- Afficher le logo centre en haut (environ 25x25mm)
-- Nom de l'association en gras sous le logo
-- Adresse, telephone et email en ligne sous le nom
-- Ligne de separation horizontale epaisse
+### 2. Format du montant : points comme separateur de milliers
 
-**2. Titre encadre**
-- "FICHE DE PAIEMENT / JUSTIFICATIF INTERNE" dans un rectangle colore (fond gris clair)
-- Reference et date affiches en dessous dans un sous-titre
+**Fichier** : `src/lib/generatePaymentPDF.ts`
 
-**3. Bloc meta dans un tableau structure**
-- Informations meta (Reference, Date, Projet, Lieu, Statut, Version) disposees dans un tableau a 2 colonnes avec bordures legeres
-- Utilisation de `doc.rect()` pour les cellules
+La fonction `formatMontant` (ligne 26-29) utilise `toLocaleString("fr-FR")` qui produit des espaces insecables. jsPDF les affiche mal (comme "/"). Correction :
 
-**4. Sections avec titres encadres**
-- Chaque section (Beneficiaire, Details, Observations) aura un titre avec un fond colore
-- Contenu aligne dans un format label:valeur avec espacement regulier
+```typescript
+function formatMontant(montant: number, devise: string): string {
+  const formatted = Number(montant).toLocaleString("fr-FR").replace(/\s/g, ".");
+  return `${formatted} ${deviseLabels[devise] || devise}`;
+}
+```
 
-**5. Formatage des montants**
-- Affichage : `250 000 Francs CFA` au lieu de `250000 XOF`
-- Mapping des devises : XOF -> "Francs CFA", EUR -> "Euros", USD -> "Dollars US"
-- Utilisation de `toLocaleString("fr-FR")` pour les separateurs de milliers
+### 3. Cadres de signature en ratio 1:1 (carre)
 
-**6. Section Signatures avec images reelles**
-- 3 blocs cote a cote : President, Beneficiaire, Tresoriere
-- Charger les images de signature depuis les URLs (settings pour President/Tresoriere, payment_signatures pour Beneficiaire)
-- Afficher l'image de signature a l'interieur du cadre si disponible
-- Afficher "Non signe" en texte si pas de signature
-- La fonction acceptera un parametre supplementaire `beneficiaireSignatureUrl` optionnel
+**Fichier** : `src/lib/generatePaymentPDF.ts`
 
-**7. Pied de page**
-- Mention legale centree
-- Date de generation + reference + version
-- Ligne de separation fine au-dessus
+Actuellement les cadres font `sigWidth x 35mm` (rectangle). Pour un ratio 1:1, le cote du carre sera egal a `sigWidth` (environ 55mm). Modifications aux lignes 255-298 :
 
-### Mise a jour de l'appel dans `src/pages/PaiementDetail.tsx`
+- Changer `sigBoxH = 35` en `sigBoxH = sigWidth` pour obtenir un carre
+- Ajuster le placement de l'image de signature pour remplir le carre tout en gardant un padding
+- L'image sera placee centree dans le carre avec un padding de 4mm de chaque cote
+- Remonter le `sigStartY` si necessaire pour que les cadres tiennent sur la page (ajuster a `Math.max(y + 4, 180)` au lieu de 200)
 
-- Passer l'URL de signature du beneficiaire a `generatePaymentPDF` pour l'inclure dans le PDF
-- La signature est deja disponible via `beneficiaireSig.signature_image_url`
+## Fichiers modifies
 
-### Fonction utilitaire d'image
-
-- Creer une fonction helper `loadImageAsBase64(url)` qui fetch l'image et la convertit en base64 data URL pour l'integrer dans jsPDF via `doc.addImage()`
-- Gestion d'erreur silencieuse : si l'image ne charge pas, on continue sans
-
-## Details techniques
-
-- jsPDF `addImage()` accepte les formats base64, PNG, JPEG
-- Pour charger les images distantes (signatures stockees dans le bucket), on utilisera `fetch()` + `FileReader` ou `canvas` pour convertir en base64
-- Le logo local (`Cachet_KPT.png`) sera importe directement comme asset statique en fallback
+- `src/hooks/useSignatures.ts` : ajout mise a jour statut paiement dans `signViaToken`
+- `src/lib/generatePaymentPDF.ts` : correction format montant + cadres carres 1:1
 
