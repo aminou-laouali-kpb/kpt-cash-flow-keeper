@@ -1,45 +1,57 @@
 
 
-# Corrections: statut apres signature, format montant, cadres signature carres
+# Suppression de l'inscription publique et invitation par les admins
 
-## 3 modifications a effectuer
+## Changements prevus
 
-### 1. Mise a jour du statut du paiement apres signature via lien
+### 1. Simplifier la page de connexion (`src/pages/Login.tsx`)
 
-**Fichier** : `src/hooks/useSignatures.ts`
+- Supprimer l'etat `isSignUp`, `fullName` et toute la logique d'inscription
+- Supprimer le bloc conditionnel "Nom complet"
+- Supprimer le bouton "Creer un compte" en bas
+- Garder uniquement le formulaire email + mot de passe + bouton "Se connecter"
 
-Dans la fonction `signViaToken` (ligne 144-175), ajouter apres la mise a jour de la `signature_request` :
+### 2. Ajouter une section "Inviter un utilisateur" dans la page Parametres (`src/pages/Parametres.tsx`)
 
-```typescript
-await supabase.from("payments").update({ statut: "signe" }).eq("id", input.payment_id);
-```
+- Ajouter une nouvelle Card "Gestion des utilisateurs" apres les cartes existantes
+- Contient un champ email + un bouton "Envoyer l'invitation"
+- Utilise `supabase.auth.admin.inviteUserByEmail()` via une edge function (le client frontend n'a pas les droits admin)
+- Visible uniquement pour les admins (idriss@karatoupourtous.org et aminou@karatoupourtous.org)
 
-### 2. Format du montant : points comme separateur de milliers
+### 3. Creer une edge function `invite-user` (`supabase/functions/invite-user/index.ts`)
 
-**Fichier** : `src/lib/generatePaymentPDF.ts`
+- Recoit un email en POST
+- Verifie que l'appelant est authentifie et est admin (via la table `user_roles`)
+- Utilise le service role key pour appeler `supabase.auth.admin.inviteUserByEmail(email)`
+- L'utilisateur invite recevra un email avec un lien pour definir son mot de passe
 
-La fonction `formatMontant` (ligne 26-29) utilise `toLocaleString("fr-FR")` qui produit des espaces insecables. jsPDF les affiche mal (comme "/"). Correction :
+### 4. Ajouter une route pour definir le mot de passe (`src/pages/SetPassword.tsx`)
 
-```typescript
-function formatMontant(montant: number, devise: string): string {
-  const formatted = Number(montant).toLocaleString("fr-FR").replace(/\s/g, ".");
-  return `${formatted} ${deviseLabels[devise] || devise}`;
-}
-```
+- Page accessible via le lien d'invitation (type `invite` dans le hash URL)
+- Formulaire pour definir un mot de passe
+- Appelle `supabase.auth.updateUser({ password })` puis redirige vers le dashboard
+- Route ajoutee dans `App.tsx` : `/set-password`
 
-### 3. Cadres de signature en ratio 1:1 (carre)
+## Details techniques
 
-**Fichier** : `src/lib/generatePaymentPDF.ts`
+**Edge function `invite-user` :**
+- Verifie le JWT de l'appelant
+- Interroge `user_roles` pour confirmer le role `admin`
+- Appelle `createClient` avec le service role key et `auth.admin.inviteUserByEmail(email, { redirectTo: origin + '/set-password' })`
 
-Actuellement les cadres font `sigWidth x 35mm` (rectangle). Pour un ratio 1:1, le cote du carre sera egal a `sigWidth` (environ 55mm). Modifications aux lignes 255-298 :
+**Page Login simplifiee :**
+- Plus aucune reference a `signUp` — uniquement `signInWithPassword`
 
-- Changer `sigBoxH = 35` en `sigBoxH = sigWidth` pour obtenir un carre
-- Ajuster le placement de l'image de signature pour remplir le carre tout en gardant un padding
-- L'image sera placee centree dans le carre avec un padding de 4mm de chaque cote
-- Remonter le `sigStartY` si necessaire pour que les cadres tiennent sur la page (ajuster a `Math.max(y + 4, 180)` au lieu de 200)
+**Page SetPassword :**
+- Detecte le token d'invitation dans l'URL (gere automatiquement par le systeme d'auth)
+- Affiche un formulaire mot de passe + confirmation
+- Met a jour le mot de passe via `updateUser`
 
-## Fichiers modifies
+## Fichiers modifies ou crees
 
-- `src/hooks/useSignatures.ts` : ajout mise a jour statut paiement dans `signViaToken`
-- `src/lib/generatePaymentPDF.ts` : correction format montant + cadres carres 1:1
+- `src/pages/Login.tsx` : simplification (suppression inscription)
+- `src/pages/Parametres.tsx` : ajout section invitation utilisateur
+- `supabase/functions/invite-user/index.ts` : nouvelle edge function
+- `src/pages/SetPassword.tsx` : nouvelle page pour definir le mot de passe
+- `src/App.tsx` : ajout route `/set-password`
 
