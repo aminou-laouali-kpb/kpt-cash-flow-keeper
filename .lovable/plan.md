@@ -1,57 +1,54 @@
 
 
-# Suppression de l'inscription publique et invitation par les admins
+# Correction : mise a jour automatique du statut apres signature
 
-## Changements prevus
+## Probleme
 
-### 1. Simplifier la page de connexion (`src/pages/Login.tsx`)
+Quand un beneficiaire signe via le lien public, il n'est pas connecte. Les regles de securite de la base de donnees empechent les utilisateurs anonymes de modifier la table `payments`. Resultat : la signature est bien enregistree, mais le statut du paiement reste bloque sur "en_attente_signature".
 
-- Supprimer l'etat `isSignUp`, `fullName` et toute la logique d'inscription
-- Supprimer le bloc conditionnel "Nom complet"
-- Supprimer le bouton "Creer un compte" en bas
-- Garder uniquement le formulaire email + mot de passe + bouton "Se connecter"
+## Solution
 
-### 2. Ajouter une section "Inviter un utilisateur" dans la page Parametres (`src/pages/Parametres.tsx`)
+Creer un **trigger automatique** sur la table `payment_signatures` : a chaque nouvelle signature valide inseree, le trigger met automatiquement a jour le statut du paiement correspondant vers "signe". Cela fonctionne car les triggers s'executent avec les privileges du proprietaire de la fonction (SECURITY DEFINER), contournant les restrictions de securite.
 
-- Ajouter une nouvelle Card "Gestion des utilisateurs" apres les cartes existantes
-- Contient un champ email + un bouton "Envoyer l'invitation"
-- Utilise `supabase.auth.admin.inviteUserByEmail()` via une edge function (le client frontend n'a pas les droits admin)
-- Visible uniquement pour les admins (idriss@karatoupourtous.org et aminou@karatoupourtous.org)
+## Modifications
 
-### 3. Creer une edge function `invite-user` (`supabase/functions/invite-user/index.ts`)
+### 1. Migration SQL (nouveau fichier)
 
-- Recoit un email en POST
-- Verifie que l'appelant est authentifie et est admin (via la table `user_roles`)
-- Utilise le service role key pour appeler `supabase.auth.admin.inviteUserByEmail(email)`
-- L'utilisateur invite recevra un email avec un lien pour definir son mot de passe
+Creer une fonction `update_payment_status_on_signature()` et un trigger `on_signature_inserted` :
 
-### 4. Ajouter une route pour definir le mot de passe (`src/pages/SetPassword.tsx`)
+- La fonction verifie que la signature inseree est valide (`is_valid = true`)
+- Si oui, elle met a jour le statut du paiement vers `signe`
+- Le trigger se declenche AFTER INSERT sur `payment_signatures`
+- La fonction est SECURITY DEFINER pour avoir les droits necessaires
 
-- Page accessible via le lien d'invitation (type `invite` dans le hash URL)
-- Formulaire pour definir un mot de passe
-- Appelle `supabase.auth.updateUser({ password })` puis redirige vers le dashboard
-- Route ajoutee dans `App.tsx` : `/set-password`
+### 2. Nettoyage du code client (`src/hooks/useSignatures.ts`)
+
+Supprimer les appels manuels de mise a jour du statut dans `signViaToken` et `createSignature`, puisque le trigger s'en charge automatiquement. Cela evite les doublons et les echecs silencieux.
+
+### 3. Correction immediate de la fiche existante
+
+La migration inclura aussi une requete pour corriger les paiements actuellement bloques : tout paiement ayant une signature valide mais encore en statut "en_attente_signature" sera passe a "signe".
 
 ## Details techniques
 
-**Edge function `invite-user` :**
-- Verifie le JWT de l'appelant
-- Interroge `user_roles` pour confirmer le role `admin`
-- Appelle `createClient` avec le service role key et `auth.admin.inviteUserByEmail(email, { redirectTo: origin + '/set-password' })`
+```text
+Flux apres correction :
 
-**Page Login simplifiee :**
-- Plus aucune reference a `signUp` — uniquement `signInWithPassword`
+  Beneficiaire signe
+       |
+       v
+  INSERT payment_signatures (is_valid=true)
+       |
+       v
+  TRIGGER on_signature_inserted
+       |
+       v
+  UPDATE payments SET statut='signe'
+  (execute en SECURITY DEFINER, pas de probleme RLS)
+```
 
-**Page SetPassword :**
-- Detecte le token d'invitation dans l'URL (gere automatiquement par le systeme d'auth)
-- Affiche un formulaire mot de passe + confirmation
-- Met a jour le mot de passe via `updateUser`
+## Fichiers concernes
 
-## Fichiers modifies ou crees
-
-- `src/pages/Login.tsx` : simplification (suppression inscription)
-- `src/pages/Parametres.tsx` : ajout section invitation utilisateur
-- `supabase/functions/invite-user/index.ts` : nouvelle edge function
-- `src/pages/SetPassword.tsx` : nouvelle page pour definir le mot de passe
-- `src/App.tsx` : ajout route `/set-password`
+- Nouvelle migration SQL : trigger + correction des fiches existantes
+- `src/hooks/useSignatures.ts` : suppression des mises a jour manuelles du statut (devenues redondantes)
 
