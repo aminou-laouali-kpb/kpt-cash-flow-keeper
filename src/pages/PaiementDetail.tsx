@@ -22,7 +22,7 @@ const categoryLabels: Record<string, string> = {
 
 const modeLabels: Record<string, string> = {
   especes: "Espèces", virement: "Virement", cheque: "Chèque",
-  mobile_money: "Mobile Money", carte_bancaire: "Carte bancaire", autre: "Autre",
+  mobile_money: "MyNITA", carte_bancaire: "Carte bancaire", autre: "Autre",
 };
 
 function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
