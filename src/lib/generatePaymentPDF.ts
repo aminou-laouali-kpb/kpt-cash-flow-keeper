@@ -24,7 +24,7 @@ const deviseLabels: Record<string, string> = {
 };
 
 function formatMontant(montant: number, devise: string): string {
-  const formatted = Number(montant).toLocaleString("fr-FR");
+  const formatted = Number(montant).toLocaleString("fr-FR").replace(/\s/g, ".");
   return `${formatted} ${deviseLabels[devise] || devise}`;
 }
 
@@ -249,11 +249,10 @@ export async function generatePaymentPDF(
   }
 
   // === SECTION 4: Signatures ===
-  const sigStartY = Math.max(y + 4, 200);
-  const sigSectionY = drawSectionTitle(doc, "SIGNATURES", sigStartY, pageWidth);
-
   const sigWidth = (pageWidth - margin * 2 - 10) / 3;
-  const sigBoxH = 35;
+  const sigBoxH = sigWidth; // 1:1 square ratio
+  const sigStartY = Math.max(y + 4, 180);
+  const sigSectionY = drawSectionTitle(doc, "SIGNATURES", sigStartY, pageWidth);
   const sigLabels = [
     { title: settings.president_fonction || "Président", name: settings.president_nom || "", img: presidentSigBase64 },
     { title: "Bénéficiaire", name: payment.beneficiaire_nom, img: beneficiaireSigBase64 },
@@ -284,7 +283,7 @@ export async function generatePaymentPDF(
     // Signature image or placeholder
     if (sig.img) {
       try {
-        doc.addImage(sig.img, "PNG", x + 4, boxY + 10, sigWidth - 8, sigBoxH - 6);
+        doc.addImage(sig.img, "PNG", x + 4, boxY + 12, sigWidth - 8, sigBoxH - 8);
       } catch {
         doc.setFontSize(7);
         doc.setTextColor(150, 150, 150);

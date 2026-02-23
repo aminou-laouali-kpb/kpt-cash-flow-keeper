@@ -167,6 +167,12 @@ export function useSignatureActions() {
         .update({ status: "signed" as any, signed_at: new Date().toISOString() })
         .eq("token", input.token);
       if (reqError) throw reqError;
+
+      // Update payment status
+      await supabase
+        .from("payments")
+        .update({ statut: "signe" as any })
+        .eq("id", input.payment_id);
     },
     onSuccess: () => {
       toast({ title: "Signature enregistrée avec succès" });
