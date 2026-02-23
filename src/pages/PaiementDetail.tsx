@@ -207,7 +207,7 @@ export default function PaiementDetail() {
       </Card>
 
       <div className="flex gap-3">
-        <Button variant="outline" onClick={() => payment && settings && generatePaymentPDF(payment, settings, (payment as any).projects?.nom)}>
+        <Button variant="outline" onClick={() => payment && settings && generatePaymentPDF(payment, settings, (payment as any).projects?.nom, beneficiaireSig?.signature_image_url)}>
           <Download className="h-4 w-4 mr-2" /> Télécharger PDF
         </Button>
       </div>

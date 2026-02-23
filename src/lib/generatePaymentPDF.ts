@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import { Payment } from "@/hooks/usePayments";
 import { Settings } from "@/hooks/useSettings";
+import logoFallback from "@/assets/Cachet_KPT.png";
 
 const categoryLabels: Record<string, string> = {
   fournitures: "Fournitures", transport: "Transport", restauration: "Restauration",
@@ -18,38 +19,149 @@ const statusLabels: Record<string, string> = {
   brouillon: "Brouillon", en_attente_signature: "En attente de signature", signe: "Signé", a_re_signer: "À re-signer",
 };
 
-export async function generatePaymentPDF(payment: Payment, settings: Settings, projectName?: string) {
+const deviseLabels: Record<string, string> = {
+  XOF: "Francs CFA", EUR: "Euros", USD: "Dollars US",
+};
+
+function formatMontant(montant: number, devise: string): string {
+  const formatted = Number(montant).toLocaleString("fr-FR");
+  return `${formatted} ${deviseLabels[devise] || devise}`;
+}
+
+async function loadImageAsBase64(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url, { mode: "cors" });
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function loadLocalImage(src: string): Promise<string | null> {
+  try {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  } catch {
+    return null;
+  }
+}
+
+function drawSectionTitle(doc: jsPDF, title: string, y: number, pageWidth: number): number {
+  const margin = 15;
+  const width = pageWidth - margin * 2;
+  doc.setFillColor(240, 240, 240);
+  doc.rect(margin, y - 5, width, 8, "F");
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(30, 30, 30);
+  doc.text(title, margin + 3, y);
+  return y + 8;
+}
+
+function drawKeyValue(doc: jsPDF, label: string, value: string, y: number, labelX = 20, valueX = 65, maxWidth = 110): number {
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(80, 80, 80);
+  doc.text(`${label} :`, labelX, y);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(30, 30, 30);
+  const lines = doc.splitTextToSize(value, maxWidth);
+  doc.text(lines, valueX, y);
+  return y + lines.length * 5;
+}
+
+export async function generatePaymentPDF(
+  payment: Payment,
+  settings: Settings,
+  projectName?: string,
+  beneficiaireSignatureUrl?: string | null,
+) {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
-  let y = 15;
+  const margin = 15;
+  let y = 12;
 
-  // Header
-  doc.setFontSize(16);
+  // --- Load images in parallel ---
+  const [logoBase64, presidentSigBase64, tresoriereSigBase64, beneficiaireSigBase64] = await Promise.all([
+    settings.logo_url ? loadImageAsBase64(settings.logo_url) : loadLocalImage(logoFallback),
+    settings.president_signature_url ? loadImageAsBase64(settings.president_signature_url) : Promise.resolve(null),
+    settings.tresoriere_signature_url ? loadImageAsBase64(settings.tresoriere_signature_url) : Promise.resolve(null),
+    beneficiaireSignatureUrl ? loadImageAsBase64(beneficiaireSignatureUrl) : Promise.resolve(null),
+  ]);
+
+  // === HEADER: Logo + Association Info ===
+  if (logoBase64) {
+    try {
+      doc.addImage(logoBase64, "PNG", pageWidth / 2 - 12, y, 24, 24);
+      y += 27;
+    } catch {
+      y += 2;
+    }
+  }
+
+  doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
+  doc.setTextColor(30, 30, 30);
   doc.text(settings.nom, pageWidth / 2, y, { align: "center" });
-  y += 7;
+  y += 6;
 
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100, 100, 100);
+  if (settings.adresse) {
+    doc.text(settings.adresse, pageWidth / 2, y, { align: "center" });
+    y += 4;
+  }
+  const contactLine = [settings.telephone, settings.email].filter(Boolean).join("  •  ");
+  if (contactLine) {
+    doc.text(contactLine, pageWidth / 2, y, { align: "center" });
+    y += 4;
+  }
+
+  // Separator line
+  y += 2;
+  doc.setDrawColor(60, 60, 60);
+  doc.setLineWidth(0.8);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 6;
+
+  // === TITLE BOX ===
+  doc.setFillColor(230, 235, 245);
+  doc.roundedRect(margin, y - 4, pageWidth - margin * 2, 12, 2, 2, "F");
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(30, 30, 80);
+  doc.text("FICHE DE PAIEMENT / JUSTIFICATIF INTERNE", pageWidth / 2, y + 4, { align: "center" });
+  y += 14;
+
+  // Subtitle: reference + date
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  if (settings.adresse) { doc.text(settings.adresse, pageWidth / 2, y, { align: "center" }); y += 5; }
-  const contactLine = [settings.telephone, settings.email].filter(Boolean).join(" | ");
-  if (contactLine) { doc.text(contactLine, pageWidth / 2, y, { align: "center" }); y += 5; }
-
-  y += 3;
-  doc.setDrawColor(200);
-  doc.line(15, y, pageWidth - 15, y);
+  doc.setTextColor(80, 80, 80);
+  doc.text(`${payment.reference}  —  ${payment.date_paiement}`, pageWidth / 2, y, { align: "center" });
   y += 8;
 
-  // Title
-  doc.setFontSize(13);
-  doc.setFont("helvetica", "bold");
-  doc.text("FICHE DE PAIEMENT / JUSTIFICATIF INTERNE", pageWidth / 2, y, { align: "center" });
-  y += 10;
-
-  // Meta
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  const meta = [
+  // === META TABLE ===
+  const metaData = [
     ["Référence", payment.reference],
     ["Date", payment.date_paiement],
     ["Projet", projectName || "—"],
@@ -57,24 +169,41 @@ export async function generatePaymentPDF(payment: Payment, settings: Settings, p
     ["Statut", statusLabels[payment.statut] || payment.statut],
     ["Version", `v${payment.version_courante}`],
   ];
-  meta.forEach(([label, value]) => {
+
+  const colWidth = (pageWidth - margin * 2) / 2;
+  const rowH = 7;
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+
+  for (let i = 0; i < metaData.length; i += 2) {
+    const rowY = y + (i / 2) * rowH;
+    // Left cell
+    doc.rect(margin, rowY, colWidth, rowH);
+    doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
-    doc.text(`${label} :`, 15, y);
+    doc.setTextColor(80, 80, 80);
+    doc.text(metaData[i][0] + " :", margin + 2, rowY + 5);
     doc.setFont("helvetica", "normal");
-    doc.text(value, 55, y);
-    y += 5;
-  });
+    doc.setTextColor(30, 30, 30);
+    doc.text(metaData[i][1], margin + 28, rowY + 5);
+    // Right cell
+    if (metaData[i + 1]) {
+      doc.rect(margin + colWidth, rowY, colWidth, rowH);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(80, 80, 80);
+      doc.text(metaData[i + 1][0] + " :", margin + colWidth + 2, rowY + 5);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(30, 30, 30);
+      doc.text(metaData[i + 1][1], margin + colWidth + 28, rowY + 5);
+    }
+  }
+  y += Math.ceil(metaData.length / 2) * rowH + 6;
 
-  y += 5;
+  // === SECTION 1: Bénéficiaire ===
+  y = drawSectionTitle(doc, "1. INFORMATIONS DU BÉNÉFICIAIRE", y, pageWidth);
+  y += 2;
 
-  // Section 1: Beneficiaire
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.text("1. Informations du bénéficiaire", 15, y);
-  y += 6;
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  const benefInfo = [
+  const benefInfo: [string, string][] = [
     ["Nom", payment.beneficiaire_nom],
     ["Téléphone", payment.beneficiaire_telephone || "—"],
     ["Email", payment.beneficiaire_email || "—"],
@@ -83,24 +212,17 @@ export async function generatePaymentPDF(payment: Payment, settings: Settings, p
   if (payment.beneficiaire_piece_type) {
     benefInfo.push(["Pièce d'identité", `${payment.beneficiaire_piece_type} — ${payment.beneficiaire_piece_numero || ""}`]);
   }
-  benefInfo.forEach(([label, value]) => {
-    doc.setFont("helvetica", "bold");
-    doc.text(`${label} :`, 20, y);
-    doc.setFont("helvetica", "normal");
-    doc.text(value, 65, y);
-    y += 5;
-  });
+  for (const [label, value] of benefInfo) {
+    y = drawKeyValue(doc, label, value, y);
+  }
+  y += 4;
 
-  y += 5;
+  // === SECTION 2: Détails du paiement ===
+  y = drawSectionTitle(doc, "2. DÉTAILS DU PAIEMENT", y, pageWidth);
+  y += 2;
 
-  // Section 2: Details
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.text("2. Détails du paiement", 15, y);
-  y += 6;
-  doc.setFontSize(9);
-  const details = [
-    ["Montant", `${Number(payment.montant).toLocaleString("fr-FR")} ${payment.devise}`],
+  const details: [string, string][] = [
+    ["Montant", formatMontant(payment.montant, payment.devise)],
     ["Catégorie", categoryLabels[payment.categorie] || payment.categorie],
     ["Mode de paiement", modeLabels[payment.mode_paiement] || payment.mode_paiement],
     ["Motif", payment.motif],
@@ -108,67 +230,90 @@ export async function generatePaymentPDF(payment: Payment, settings: Settings, p
   if (payment.reference_transaction) details.push(["Réf. transaction", payment.reference_transaction]);
   if (payment.personne_effectuant) details.push(["Effectué par", payment.personne_effectuant]);
 
-  details.forEach(([label, value]) => {
-    doc.setFont("helvetica", "bold");
-    doc.text(`${label} :`, 20, y);
-    doc.setFont("helvetica", "normal");
-    const lines = doc.splitTextToSize(value, 110);
-    doc.text(lines, 65, y);
-    y += lines.length * 5;
-  });
+  for (const [label, value] of details) {
+    y = drawKeyValue(doc, label, value, y);
+  }
+  y += 4;
 
-  y += 5;
-
-  // Section 3: Observations
+  // === SECTION 3: Observations ===
   if (payment.commentaire || payment.motif_absence_recu) {
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("3. Justificatifs / Observations", 15, y);
-    y += 6;
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
+    y = drawSectionTitle(doc, "3. JUSTIFICATIFS / OBSERVATIONS", y, pageWidth);
+    y += 2;
     if (payment.motif_absence_recu) {
-      doc.text(`Motif absence de reçu : ${payment.motif_absence_recu}`, 20, y);
-      y += 5;
+      y = drawKeyValue(doc, "Motif absence de reçu", payment.motif_absence_recu, y);
     }
     if (payment.commentaire) {
-      const lines = doc.splitTextToSize(`Commentaire : ${payment.commentaire}`, pageWidth - 40);
-      doc.text(lines, 20, y);
-      y += lines.length * 5;
+      y = drawKeyValue(doc, "Commentaire", payment.commentaire, y);
     }
-    y += 5;
+    y += 4;
   }
 
-  // Section 4: Signatures
-  const sigY = Math.max(y + 10, 220);
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.text("Signatures", 15, sigY - 5);
+  // === SECTION 4: Signatures ===
+  const sigStartY = Math.max(y + 4, 200);
+  const sigSectionY = drawSectionTitle(doc, "SIGNATURES", sigStartY, pageWidth);
 
-  const sigWidth = (pageWidth - 40) / 3;
+  const sigWidth = (pageWidth - margin * 2 - 10) / 3;
+  const sigBoxH = 35;
   const sigLabels = [
-    { title: settings.president_fonction || "Président", name: settings.president_nom || "" },
-    { title: "Bénéficiaire", name: payment.beneficiaire_nom },
-    { title: settings.tresoriere_fonction || "Trésorière", name: settings.tresoriere_nom || "" },
+    { title: settings.president_fonction || "Président", name: settings.president_nom || "", img: presidentSigBase64 },
+    { title: "Bénéficiaire", name: payment.beneficiaire_nom, img: beneficiaireSigBase64 },
+    { title: settings.tresoriere_fonction || "Trésorière", name: settings.tresoriere_nom || "", img: tresoriereSigBase64 },
   ];
-  sigLabels.forEach((sig, i) => {
-    const x = 15 + i * (sigWidth + 5);
+
+  for (let i = 0; i < sigLabels.length; i++) {
+    const sig = sigLabels[i];
+    const x = margin + i * (sigWidth + 5);
+    const boxY = sigSectionY + 2;
+
+    // Title
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
-    doc.text(sig.title, x + sigWidth / 2, sigY, { align: "center" });
-    doc.setFont("helvetica", "normal");
-    doc.text(sig.name, x + sigWidth / 2, sigY + 5, { align: "center" });
-    doc.rect(x, sigY + 8, sigWidth, 25);
-  });
+    doc.setTextColor(30, 30, 30);
+    doc.text(sig.title, x + sigWidth / 2, boxY, { align: "center" });
 
-  // Footer
-  const footerY = 280;
+    // Name
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(80, 80, 80);
+    doc.text(sig.name, x + sigWidth / 2, boxY + 5, { align: "center" });
+
+    // Box
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.4);
+    doc.rect(x, boxY + 8, sigWidth, sigBoxH);
+
+    // Signature image or placeholder
+    if (sig.img) {
+      try {
+        doc.addImage(sig.img, "PNG", x + 4, boxY + 10, sigWidth - 8, sigBoxH - 6);
+      } catch {
+        doc.setFontSize(7);
+        doc.setTextColor(150, 150, 150);
+        doc.text("Erreur de chargement", x + sigWidth / 2, boxY + 25, { align: "center" });
+      }
+    } else {
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(150, 150, 150);
+      doc.text("Non signé", x + sigWidth / 2, boxY + 25, { align: "center" });
+    }
+  }
+
+  // === FOOTER ===
+  const footerY = 278;
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.line(margin, footerY - 3, pageWidth - margin, footerY - 3);
+
   doc.setFontSize(7);
   doc.setFont("helvetica", "italic");
+  doc.setTextColor(120, 120, 120);
   if (settings.mention_legale) {
     doc.text(settings.mention_legale, pageWidth / 2, footerY, { align: "center", maxWidth: pageWidth - 30 });
   }
-  doc.text(`Généré le ${new Date().toLocaleDateString("fr-FR")} — ${payment.reference} v${payment.version_courante}`, pageWidth / 2, footerY + 5, { align: "center" });
+  doc.text(
+    `Généré le ${new Date().toLocaleDateString("fr-FR")} — ${payment.reference} v${payment.version_courante}`,
+    pageWidth / 2, footerY + 5, { align: "center" },
+  );
 
   doc.save(`${payment.reference}.pdf`);
 }
