@@ -1,61 +1,66 @@
 
 
-# Correction du bug de creation de paiement et ajout des signatures
+# Amelioration du PDF de fiche de paiement
 
-## Bug identifie
+## Objectif
 
-La fonction SQL `generate_payment_reference()` echoue avec l'erreur "UPDATE requires a WHERE clause". La ligne 163 de la migration fait un UPDATE sans WHERE :
-```sql
-UPDATE public.settings_association SET prochain_numero = _numero + 1;
-```
-Il faut ajouter une clause WHERE pour cibler l'enregistrement singleton.
+Rendre le PDF professionnel avec le logo de l'association, les signatures reelles (President, Tresoriere, Beneficiaire), un formatage soigne des montants en "Francs CFA", et une mise en page structuree avec encadres et bordures.
 
-## Corrections et ajouts prevus
+## Modifications prevues
 
-### 1. Correction de la fonction SQL `generate_payment_reference()`
+### Fichier unique a modifier : `src/lib/generatePaymentPDF.ts`
 
-Creer une migration qui remplace la fonction avec un WHERE clause :
-```sql
-UPDATE public.settings_association 
-SET prochain_numero = _numero + 1 
-WHERE id = (SELECT id FROM public.settings_association LIMIT 1);
-```
+La fonction `generatePaymentPDF` sera reecrite avec les ameliorations suivantes :
 
-### 2. Installation de react-signature-canvas
+**1. En-tete professionnel avec logo**
+- Charger le logo depuis `settings.logo_url` (ou utiliser l'asset local `Cachet_KPT.png` en fallback)
+- Afficher le logo centre en haut (environ 25x25mm)
+- Nom de l'association en gras sous le logo
+- Adresse, telephone et email en ligne sous le nom
+- Ligne de separation horizontale epaisse
 
-Ajouter la dependance `react-signature-canvas` et ses types `@types/react-signature-canvas` au projet.
+**2. Titre encadre**
+- "FICHE DE PAIEMENT / JUSTIFICATIF INTERNE" dans un rectangle colore (fond gris clair)
+- Reference et date affiches en dessous dans un sous-titre
 
-### 3. Composants de signature a creer
+**3. Bloc meta dans un tableau structure**
+- Informations meta (Reference, Date, Projet, Lieu, Statut, Version) disposees dans un tableau a 2 colonnes avec bordures legeres
+- Utilisation de `doc.rect()` pour les cellules
 
-- **`src/components/SignatureCanvas.tsx`** : composant wrapper autour de react-signature-canvas avec boutons Effacer/Valider, compatible mobile (tactile)
-- **`src/components/SignatureDialog.tsx`** : dialogue modal pour la signature sur place du beneficiaire, avec le canvas integre
-- **`src/components/SendSignatureLink.tsx`** : dialogue pour generer et envoyer le lien de signature a distance (copier, WhatsApp, email)
-- **`src/pages/SignaturePage.tsx`** : page publique accessible via token (resume fiche + zone signature + boutons Je signe / Je refuse)
+**4. Sections avec titres encadres**
+- Chaque section (Beneficiaire, Details, Observations) aura un titre avec un fond colore
+- Contenu aligne dans un format label:valeur avec espacement regulier
 
-### 4. Integration dans PaiementDetail
+**5. Formatage des montants**
+- Affichage : `250 000 Francs CFA` au lieu de `250000 XOF`
+- Mapping des devises : XOF -> "Francs CFA", EUR -> "Euros", USD -> "Dollars US"
+- Utilisation de `toLocaleString("fr-FR")` pour les separateurs de milliers
 
-Ajouter dans la page detail du paiement :
-- Bloc signatures avec affichage des signatures President et Tresoriere (auto depuis les parametres)
-- Zone signature beneficiaire avec statut (en attente / signee)
-- Boutons "Signer sur place" et "Envoyer lien de signature"
+**6. Section Signatures avec images reelles**
+- 3 blocs cote a cote : President, Beneficiaire, Tresoriere
+- Charger les images de signature depuis les URLs (settings pour President/Tresoriere, payment_signatures pour Beneficiaire)
+- Afficher l'image de signature a l'interieur du cadre si disponible
+- Afficher "Non signe" en texte si pas de signature
+- La fonction acceptera un parametre supplementaire `beneficiaireSignatureUrl` optionnel
 
-### 5. Route publique
+**7. Pied de page**
+- Mention legale centree
+- Date de generation + reference + version
+- Ligne de separation fine au-dessus
 
-Ajouter la route `/signer/:token` dans App.tsx, hors du ProtectedRoute, pour permettre la signature a distance sans authentification.
+### Mise a jour de l'appel dans `src/pages/PaiementDetail.tsx`
 
-### 6. Hook useSignatures
+- Passer l'URL de signature du beneficiaire a `generatePaymentPDF` pour l'inclure dans le PDF
+- La signature est deja disponible via `beneficiaireSig.signature_image_url`
 
-Creer `src/hooks/useSignatures.ts` pour gerer les operations CRUD sur payment_signatures et signature_requests.
+### Fonction utilitaire d'image
 
-## Fichiers modifies
+- Creer une fonction helper `loadImageAsBase64(url)` qui fetch l'image et la convertit en base64 data URL pour l'integrer dans jsPDF via `doc.addImage()`
+- Gestion d'erreur silencieuse : si l'image ne charge pas, on continue sans
 
-- Migration SQL (nouvelle) : correction `generate_payment_reference()`
-- `package.json` : ajout react-signature-canvas
-- `src/components/SignatureCanvas.tsx` (nouveau)
-- `src/components/SignatureDialog.tsx` (nouveau)
-- `src/components/SendSignatureLink.tsx` (nouveau)
-- `src/hooks/useSignatures.ts` (nouveau)
-- `src/pages/SignaturePage.tsx` (nouveau)
-- `src/pages/PaiementDetail.tsx` : ajout section signatures + boutons
-- `src/App.tsx` : ajout route `/signer/:token`
+## Details techniques
+
+- jsPDF `addImage()` accepte les formats base64, PNG, JPEG
+- Pour charger les images distantes (signatures stockees dans le bucket), on utilisera `fetch()` + `FileReader` ou `canvas` pour convertir en base64
+- Le logo local (`Cachet_KPT.png`) sera importe directement comme asset statique en fallback
 
