@@ -35,7 +35,7 @@ const modes = [
   { value: "especes", label: "Espèces" },
   { value: "virement", label: "Virement" },
   { value: "cheque", label: "Chèque" },
-  { value: "mobile_money", label: "Mobile Money" },
+  { value: "mobile_money", label: "MyNITA" },
   { value: "carte_bancaire", label: "Carte bancaire" },
   { value: "autre", label: "Autre" },
 ];
