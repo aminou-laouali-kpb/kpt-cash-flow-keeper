@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Loader2, Save, Upload, X } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
+import InviteUserSection from "@/components/InviteUserSection";
 
 const schema = z.object({
   nom: z.string().min(1, "Requis").max(200),
@@ -227,6 +228,8 @@ export default function Parametres() {
           </Button>
         </form>
       </Form>
+
+      <InviteUserSection />
     </div>
   );
 }
