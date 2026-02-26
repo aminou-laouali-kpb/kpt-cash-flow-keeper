@@ -250,7 +250,7 @@ export async function generatePaymentPDF(
 
   // === SECTION 4: Signatures ===
   const sigWidth = (pageWidth - margin * 2 - 10) / 3;
-  const sigBoxH = sigWidth; // 1:1 square ratio
+  const sigBoxH = 25; // Realistic pen-signature height
   const sigStartY = Math.max(y + 4, 180);
   const sigSectionY = drawSectionTitle(doc, "SIGNATURES", sigStartY, pageWidth);
   const sigLabels = [
@@ -283,7 +283,7 @@ export async function generatePaymentPDF(
     // Signature image or placeholder
     if (sig.img) {
       try {
-        doc.addImage(sig.img, "PNG", x + 4, boxY + 12, sigWidth - 8, sigBoxH - 8);
+        doc.addImage(sig.img, "PNG", x + 3, boxY + 11, sigWidth - 6, sigBoxH - 6);
       } catch {
         doc.setFontSize(7);
         doc.setTextColor(150, 150, 150);
