@@ -1,43 +1,52 @@
 
 
-# Correction de la taille des signatures dans le PDF
+# Signatures PDF proportionnelles
 
-## Probleme identifie
+## Probleme
 
-Les cadres de signature dans le PDF utilisent un ratio 1:1 (carre) avec `sigBoxH = sigWidth`, ce qui donne des cadres d'environ 57mm x 57mm. Les signatures a l'interieur font environ 49mm de haut, ce qui est beaucoup trop grand par rapport a une signature au stylo (environ 15-20mm de haut).
+Les images de signature sont inserees avec des dimensions fixes (`sigWidth - 6` x `sigBoxH - 6`), ce qui etire les signatures 1:1 dans un cadre rectangulaire. Resultat : signatures deformees et non professionnelles.
 
-## Verification du partage de lien
+## Solution
 
-Apres analyse complete :
-- La route `/signer/:token` est correctement en acces public (pas de `ProtectedRoute`)
-- Les politiques de securite permettent l'insertion de signatures par des utilisateurs anonymes via token
-- La mise a jour du statut se fait via le trigger automatique (SECURITY DEFINER)
-- Aucun blocage detecte sur le flux de signature a distance
-
-## Correction prevue
+Calculer les dimensions reelles de chaque image de signature avant de l'inserer dans le PDF, puis ajuster la taille pour qu'elle s'inscrive proportionnellement dans le cadre (fit proportionnel avec conservation du ratio).
 
 ### Fichier : `src/lib/generatePaymentPDF.ts`
 
-Reduire la hauteur des cadres de signature pour obtenir une taille realiste :
+1. **Ajouter une fonction utilitaire** `getImageDimensions(base64: string): Promise<{width: number, height: number}>` qui charge l'image dans un element `Image` temporaire pour recuperer ses dimensions naturelles (naturalWidth / naturalHeight).
 
-- Changer `sigBoxH` de `sigWidth` (57mm) a environ `25` mm (hauteur du cadre)
-- Ajuster le padding interne de l'image de signature en consequence (2-3mm de marge au lieu de 4mm)
-- Cela donnera des signatures d'environ 20mm de haut dans le PDF, similaire a une signature au stylo
+2. **Modifier le chargement des images** : au lieu de stocker uniquement le base64 des signatures, stocker aussi leurs dimensions reelles. Les appels `loadImageAsBase64` et `loadLocalImage` dans le `Promise.all` seront completes par un appel a `getImageDimensions` pour chaque image chargee.
 
-### Detail technique
-
-Lignes concernees (252-286) :
+3. **Modifier le rendu des signatures** (ligne 286) : au lieu de forcer `sigWidth - 6` x `sigBoxH - 6`, calculer un "fit" proportionnel :
 
 ```text
-Avant :
-  sigBoxH = sigWidth          → ~57mm (trop grand)
-  image: sigWidth-8 x sigBoxH-8 → ~49x49mm
+Espace disponible : maxW = sigWidth - 6, maxH = sigBoxH - 6
+Ratio image : imgRatio = naturalWidth / naturalHeight
+Ratio cadre : boxRatio = maxW / maxH
 
-Apres :
-  sigBoxH = 25                → 25mm (taille realiste)
-  image: sigWidth-6 x sigBoxH-6 → ~51x19mm (proportions naturelles)
+Si imgRatio > boxRatio :
+  → Image plus large que haute : largeur = maxW, hauteur = maxW / imgRatio
+Sinon :
+  → Image plus haute que large : hauteur = maxH, largeur = maxH * imgRatio
+
+Centrer horizontalement et verticalement dans le cadre.
 ```
 
-## Fichiers modifies
+Cela garantit que chaque signature garde ses proportions naturelles et soit centree dans son cadre, quelle que soit la forme de l'image source.
 
-- `src/lib/generatePaymentPDF.ts` : reduction de la hauteur des cadres et images de signature
+## Detail technique
+
+La structure `sigLabels` sera enrichie pour inclure les dimensions :
+
+```text
+sigLabels = [
+  { title, name, img: base64, imgW: number, imgH: number },
+  ...
+]
+```
+
+Le rendu utilisera ces dimensions pour calculer le fit proportionnel avant `addImage`.
+
+## Fichier modifie
+
+- `src/lib/generatePaymentPDF.ts`
+
