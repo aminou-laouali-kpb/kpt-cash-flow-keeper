@@ -65,6 +65,20 @@ async function loadLocalImage(src: string): Promise<string | null> {
   }
 }
 
+type SigData = { base64: string; w: number; h: number } | null;
+
+async function loadSigWithDims(url: string | null | undefined): Promise<SigData> {
+  if (!url) return null;
+  const base64 = await loadImageAsBase64(url);
+  if (!base64) return null;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ base64, w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => resolve({ base64, w: 1, h: 1 });
+    img.src = base64;
+  });
+}
+
 function drawSectionTitle(doc: jsPDF, title: string, y: number, pageWidth: number): number {
   const margin = 15;
   const width = pageWidth - margin * 2;
@@ -101,11 +115,11 @@ export async function generatePaymentPDF(
   let y = 12;
 
   // --- Load images in parallel ---
-  const [logoBase64, presidentSigBase64, tresoriereSigBase64, beneficiaireSigBase64] = await Promise.all([
+  const [logoBase64, presidentSig, tresoriereSig, beneficiaireSig] = await Promise.all([
     settings.logo_url ? loadImageAsBase64(settings.logo_url) : loadLocalImage(logoFallback),
-    settings.president_signature_url ? loadImageAsBase64(settings.president_signature_url) : Promise.resolve(null),
-    settings.tresoriere_signature_url ? loadImageAsBase64(settings.tresoriere_signature_url) : Promise.resolve(null),
-    beneficiaireSignatureUrl ? loadImageAsBase64(beneficiaireSignatureUrl) : Promise.resolve(null),
+    loadSigWithDims(settings.president_signature_url),
+    loadSigWithDims(settings.tresoriere_signature_url),
+    loadSigWithDims(beneficiaireSignatureUrl),
   ]);
 
   // === HEADER: Logo + Association Info ===
@@ -254,13 +268,13 @@ export async function generatePaymentPDF(
   const sigStartY = Math.max(y + 4, 180);
   const sigSectionY = drawSectionTitle(doc, "SIGNATURES", sigStartY, pageWidth);
   const sigLabels = [
-    { title: settings.president_fonction || "Président", name: settings.president_nom || "", img: presidentSigBase64 },
-    { title: "Bénéficiaire", name: payment.beneficiaire_nom, img: beneficiaireSigBase64 },
-    { title: settings.tresoriere_fonction || "Trésorière", name: settings.tresoriere_nom || "", img: tresoriereSigBase64 },
+    { title: settings.president_fonction || "Président", name: settings.president_nom || "", sig: presidentSig },
+    { title: "Bénéficiaire", name: payment.beneficiaire_nom, sig: beneficiaireSig },
+    { title: settings.tresoriere_fonction || "Trésorière", name: settings.tresoriere_nom || "", sig: tresoriereSig },
   ];
 
   for (let i = 0; i < sigLabels.length; i++) {
-    const sig = sigLabels[i];
+    const entry = sigLabels[i];
     const x = margin + i * (sigWidth + 5);
     const boxY = sigSectionY + 2;
 
@@ -268,12 +282,12 @@ export async function generatePaymentPDF(
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(30, 30, 30);
-    doc.text(sig.title, x + sigWidth / 2, boxY, { align: "center" });
+    doc.text(entry.title, x + sigWidth / 2, boxY, { align: "center" });
 
     // Name
     doc.setFont("helvetica", "normal");
     doc.setTextColor(80, 80, 80);
-    doc.text(sig.name, x + sigWidth / 2, boxY + 5, { align: "center" });
+    doc.text(entry.name, x + sigWidth / 2, boxY + 5, { align: "center" });
 
     // Box
     doc.setDrawColor(180, 180, 180);
@@ -281,9 +295,23 @@ export async function generatePaymentPDF(
     doc.rect(x, boxY + 8, sigWidth, sigBoxH);
 
     // Signature image or placeholder
-    if (sig.img) {
+    if (entry.sig) {
       try {
-        doc.addImage(sig.img, "PNG", x + 3, boxY + 11, sigWidth - 6, sigBoxH - 6);
+        const maxW = sigWidth - 6;
+        const maxH = sigBoxH - 6;
+        const imgRatio = entry.sig.w / entry.sig.h;
+        const boxRatio = maxW / maxH;
+        let renderW: number, renderH: number;
+        if (imgRatio > boxRatio) {
+          renderW = maxW;
+          renderH = maxW / imgRatio;
+        } else {
+          renderH = maxH;
+          renderW = maxH * imgRatio;
+        }
+        const offsetX = x + 3 + (maxW - renderW) / 2;
+        const offsetY = boxY + 11 + (maxH - renderH) / 2;
+        doc.addImage(entry.sig.base64, "PNG", offsetX, offsetY, renderW, renderH);
       } catch {
         doc.setFontSize(7);
         doc.setTextColor(150, 150, 150);
