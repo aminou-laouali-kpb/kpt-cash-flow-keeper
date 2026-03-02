@@ -1,52 +1,33 @@
 
-
-# Signatures PDF proportionnelles
+# Uniformiser la taille des signatures dans le PDF
 
 ## Probleme
 
-Les images de signature sont inserees avec des dimensions fixes (`sigWidth - 6` x `sigBoxH - 6`), ce qui etire les signatures 1:1 dans un cadre rectangulaire. Resultat : signatures deformees et non professionnelles.
+Les trois signatures utilisent le meme cadre et la meme logique de mise a l'echelle proportionnelle. Cependant, la signature du beneficiaire (capturee par le canvas avec `getTrimmedCanvas()`) est recadree sans marge autour des traits, ce qui fait que les traits remplissent tout le cadre disponible. Les signatures du president et de la tresoriere (images importees) contiennent naturellement de l'espace vide autour des traits, ce qui les fait paraitre plus petites.
 
 ## Solution
 
-Calculer les dimensions reelles de chaque image de signature avant de l'inserer dans le PDF, puis ajuster la taille pour qu'elle s'inscrive proportionnellement dans le cadre (fit proportionnel avec conservation du ratio).
+Appliquer un facteur de reduction uniforme (0.75) a toutes les signatures pour qu'elles ne remplissent pas entierement le cadre. Cela ajoute une marge interne supplementaire et donne un rendu plus naturel et professionnel, similaire a une signature au stylo sur papier.
 
 ### Fichier : `src/lib/generatePaymentPDF.ts`
 
-1. **Ajouter une fonction utilitaire** `getImageDimensions(base64: string): Promise<{width: number, height: number}>` qui charge l'image dans un element `Image` temporaire pour recuperer ses dimensions naturelles (naturalWidth / naturalHeight).
-
-2. **Modifier le chargement des images** : au lieu de stocker uniquement le base64 des signatures, stocker aussi leurs dimensions reelles. Les appels `loadImageAsBase64` et `loadLocalImage` dans le `Promise.all` seront completes par un appel a `getImageDimensions` pour chaque image chargee.
-
-3. **Modifier le rendu des signatures** (ligne 286) : au lieu de forcer `sigWidth - 6` x `sigBoxH - 6`, calculer un "fit" proportionnel :
+Modifier le calcul de rendu des signatures (lignes 300-313) pour appliquer un facteur d'echelle apres le calcul proportionnel :
 
 ```text
-Espace disponible : maxW = sigWidth - 6, maxH = sigBoxH - 6
-Ratio image : imgRatio = naturalWidth / naturalHeight
-Ratio cadre : boxRatio = maxW / maxH
+Avant :
+  maxW = sigWidth - 6
+  maxH = sigBoxH - 6
+  → Signature remplit tout l'espace disponible
 
-Si imgRatio > boxRatio :
-  → Image plus large que haute : largeur = maxW, hauteur = maxW / imgRatio
-Sinon :
-  → Image plus haute que large : hauteur = maxH, largeur = maxH * imgRatio
-
-Centrer horizontalement et verticalement dans le cadre.
+Apres :
+  maxW = (sigWidth - 6) * 0.75
+  maxH = (sigBoxH - 6) * 0.75
+  → Signature occupe 75% de l'espace, avec marge naturelle
+  → Centrage horizontal et vertical dans le cadre complet
 ```
 
-Cela garantit que chaque signature garde ses proportions naturelles et soit centree dans son cadre, quelle que soit la forme de l'image source.
-
-## Detail technique
-
-La structure `sigLabels` sera enrichie pour inclure les dimensions :
-
-```text
-sigLabels = [
-  { title, name, img: base64, imgW: number, imgH: number },
-  ...
-]
-```
-
-Le rendu utilisera ces dimensions pour calculer le fit proportionnel avant `addImage`.
+Le centrage sera recalcule sur la base de l'espace total (sigWidth - 6, sigBoxH - 6) pour que la signature reste centree dans le cadre.
 
 ## Fichier modifie
 
-- `src/lib/generatePaymentPDF.ts`
-
+- `src/lib/generatePaymentPDF.ts` (lignes 300-313)
