@@ -11,6 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Loader2, Save, Upload, X } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
 import InviteUserSection from "@/components/InviteUserSection";
+import { SignatureUpload } from "@/components/SignatureUpload";
 
 const schema = z.object({
   nom: z.string().min(1, "Requis").max(200),
@@ -110,7 +111,21 @@ export default function Parametres() {
     updateSettings({ president_signature_url: url } as any);
   };
 
+  const handlePresidentSignatureDrawn = async (dataUrl: string) => {
+    const blob = await (await fetch(dataUrl)).blob();
+    const file = new File([blob], `signature_president_${Date.now()}.png`, { type: "image/png" });
+    const url = await uploadFile(file, "signatures");
+    updateSettings({ president_signature_url: url } as any);
+  };
+
   const handleTresoriereSignature = async (file: File) => {
+    const url = await uploadFile(file, "signatures");
+    updateSettings({ tresoriere_signature_url: url } as any);
+  };
+
+  const handleTresoriereSignatureDrawn = async (dataUrl: string) => {
+    const blob = await (await fetch(dataUrl)).blob();
+    const file = new File([blob], `signature_tresoriere_${Date.now()}.png`, { type: "image/png" });
     const url = await uploadFile(file, "signatures");
     updateSettings({ tresoriere_signature_url: url } as any);
   };
@@ -173,7 +188,7 @@ export default function Parametres() {
                   <FormItem><FormLabel>Fonction</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
               </div>
-              <ImageUpload label="Signature du Président" currentUrl={settings?.president_signature_url || null} onUpload={handlePresidentSignature} />
+              <SignatureUpload label="Signature du Président" currentUrl={settings?.president_signature_url || null} onUpload={handlePresidentSignature} onDrawn={handlePresidentSignatureDrawn} />
             </CardContent>
           </Card>
 
@@ -189,7 +204,7 @@ export default function Parametres() {
                   <FormItem><FormLabel>Fonction</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
               </div>
-              <ImageUpload label="Signature de la Trésorière" currentUrl={settings?.tresoriere_signature_url || null} onUpload={handleTresoriereSignature} />
+              <SignatureUpload label="Signature de la Trésorière" currentUrl={settings?.tresoriere_signature_url || null} onUpload={handleTresoriereSignature} onDrawn={handleTresoriereSignatureDrawn} />
             </CardContent>
           </Card>
 
