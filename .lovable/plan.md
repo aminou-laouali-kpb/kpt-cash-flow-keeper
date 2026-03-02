@@ -1,33 +1,74 @@
 
-# Uniformiser la taille des signatures dans le PDF
 
-## Probleme
+# Ajouter un canvas de signature pour le President et la Tresoriere dans les Parametres
 
-Les trois signatures utilisent le meme cadre et la meme logique de mise a l'echelle proportionnelle. Cependant, la signature du beneficiaire (capturee par le canvas avec `getTrimmedCanvas()`) est recadree sans marge autour des traits, ce qui fait que les traits remplissent tout le cadre disponible. Les signatures du president et de la tresoriere (images importees) contiennent naturellement de l'espace vide autour des traits, ce qui les fait paraitre plus petites.
+## Contexte
+
+Actuellement, les signatures du president et de la tresoriere ne peuvent etre ajoutees que par upload d'image dans la page Parametres. L'utilisateur souhaite pouvoir dessiner directement la signature (comme pour le beneficiaire) dans les parametres.
 
 ## Solution
 
-Appliquer un facteur de reduction uniforme (0.75) a toutes les signatures pour qu'elles ne remplissent pas entierement le cadre. Cela ajoute une marge interne supplementaire et donne un rendu plus naturel et professionnel, similaire a une signature au stylo sur papier.
+Remplacer le composant `ImageUpload` pour les signatures du president et de la tresoriere par un composant hybride qui offre deux options :
+1. **Dessiner la signature** via le composant `SignatureCanvas` existant
+2. **Importer une image** via upload de fichier (fonctionnalite actuelle conservee)
 
-### Fichier : `src/lib/generatePaymentPDF.ts`
+## Modifications prevues
 
-Modifier le calcul de rendu des signatures (lignes 300-313) pour appliquer un facteur d'echelle apres le calcul proportionnel :
+### Fichier : `src/pages/Parametres.tsx`
+
+1. **Importer** le composant `SignatureCanvas` existant
+2. **Creer un composant `SignatureUpload`** qui remplace `ImageUpload` pour les sections signature. Ce composant affichera :
+   - La signature actuelle si elle existe (avec bouton supprimer)
+   - Deux onglets ou boutons : "Dessiner" et "Importer une image"
+   - Le mode "Dessiner" affiche le `SignatureCanvas` ; a la validation, l'image base64 est uploadee dans le storage puis l'URL est sauvegardee dans les settings
+   - Le mode "Importer" garde le comportement actuel (input file)
+3. **Remplacer** les deux appels `ImageUpload` pour les signatures president et tresoriere par le nouveau composant `SignatureUpload`
+4. Le composant `ImageUpload` pour le **logo** reste inchange
+
+### Flux technique
 
 ```text
-Avant :
-  maxW = sigWidth - 6
-  maxH = sigBoxH - 6
-  → Signature remplit tout l'espace disponible
+Utilisateur clique "Dessiner"
+  → SignatureCanvas s'affiche
+  → Utilisateur dessine et valide
+  → Le dataURL (base64) est converti en Blob
+  → Upload vers le storage (kpt-files/signatures/...)
+  → URL publique recuperee
+  → updateSettings({ president_signature_url: url })
 
-Apres :
-  maxW = (sigWidth - 6) * 0.75
-  maxH = (sigBoxH - 6) * 0.75
-  → Signature occupe 75% de l'espace, avec marge naturelle
-  → Centrage horizontal et vertical dans le cadre complet
+Utilisateur clique "Importer"
+  → Input file classique (comportement actuel)
+  → Upload + updateSettings (inchange)
 ```
 
-Le centrage sera recalcule sur la base de l'espace total (sigWidth - 6, sigBoxH - 6) pour que la signature reste centree dans le cadre.
+### Composant SignatureUpload (nouveau, inline dans Parametres.tsx)
 
-## Fichier modifie
+- Props : `label`, `currentUrl`, `onUpload (file: File) => Promise<void>`, `onDrawn (dataUrl: string) => Promise<void>`
+- Etat local : `mode` ("view" | "draw" | "upload"), `preview`
+- En mode "view" : affiche la signature actuelle ou "Non configuree", avec deux boutons d'action
+- En mode "draw" : affiche `SignatureCanvas`, a la validation appelle `onDrawn`
+- En mode "upload" : affiche l'input file, appelle `onUpload`
 
-- `src/lib/generatePaymentPDF.ts` (lignes 300-313)
+### Handlers dans Parametres
+
+Ajouter deux handlers pour la signature dessinee :
+
+```text
+handlePresidentSignatureDrawn(dataUrl):
+  → fetch(dataUrl) → blob
+  → upload blob vers storage
+  → updateSettings({ president_signature_url: url })
+
+handleTresoriereSignatureDrawn(dataUrl):
+  → meme logique
+```
+
+## Fichiers modifies
+
+- `src/pages/Parametres.tsx` : ajout du composant `SignatureUpload` et des handlers pour signatures dessinees
+
+## Fichiers non modifies
+
+- `src/components/SignatureCanvas.tsx` : reutilise tel quel
+- `src/hooks/useSettings.ts` : la fonction `uploadFile` existante sera reutilisee pour uploader le blob
+
