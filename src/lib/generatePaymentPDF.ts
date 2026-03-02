@@ -297,8 +297,10 @@ export async function generatePaymentPDF(
     // Signature image or placeholder
     if (entry.sig) {
       try {
-        const maxW = sigWidth - 6;
-        const maxH = sigBoxH - 6;
+        const totalW = sigWidth - 6;
+        const totalH = sigBoxH - 6;
+        const maxW = totalW * 0.75;
+        const maxH = totalH * 0.75;
         const imgRatio = entry.sig.w / entry.sig.h;
         const boxRatio = maxW / maxH;
         let renderW: number, renderH: number;
@@ -309,8 +311,8 @@ export async function generatePaymentPDF(
           renderH = maxH;
           renderW = maxH * imgRatio;
         }
-        const offsetX = x + 3 + (maxW - renderW) / 2;
-        const offsetY = boxY + 11 + (maxH - renderH) / 2;
+        const offsetX = x + 3 + (totalW - renderW) / 2;
+        const offsetY = boxY + 11 + (totalH - renderH) / 2;
         doc.addImage(entry.sig.base64, "PNG", offsetX, offsetY, renderW, renderH);
       } catch {
         doc.setFontSize(7);
