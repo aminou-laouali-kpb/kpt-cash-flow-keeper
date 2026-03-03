@@ -79,6 +79,24 @@ export default function Parametres() {
     },
   });
 
+  // Auto-upload president signature from local asset if not yet configured
+  useEffect(() => {
+    const autoUploadPresidentSignature = async () => {
+      if (settings && !settings.president_signature_url) {
+        try {
+          const response = await fetch("/signatures/president_sign.png");
+          const blob = await response.blob();
+          const file = new File([blob], `signature_president_${Date.now()}.png`, { type: "image/png" });
+          const url = await uploadFile(file, "signatures");
+          updateSettings({ president_signature_url: url } as any);
+        } catch (e) {
+          console.error("Auto-upload president signature failed:", e);
+        }
+      }
+    };
+    autoUploadPresidentSignature();
+  }, [settings?.president_signature_url]);
+
   useEffect(() => {
     if (settings) {
       form.reset({
