@@ -1,26 +1,31 @@
 
 
-# Enregistrer la signature du Président
+# Corriger les signatures du Président et de la Trésorière
 
-## Ce qui sera fait
+## Problème
 
-1. **Copier l'image** `user-uploads://Idriss_sign.png` dans `src/assets/signatures/president_sign.png`
-2. **Uploader automatiquement** cette image dans le storage (`kpt-files/signatures/`) au demarrage de l'application, puis mettre a jour le champ `president_signature_url` dans la table `settings_association`
-3. Concretement : creer un petit script d'initialisation (ou un one-shot dans la page Parametres) qui detecte si la signature du president n'est pas encore configuree et l'uploade depuis l'asset local
+Les `useEffect` d'auto-upload dans `Parametres.tsx` vérifient `if (!settings.president_signature_url)` — mais une ancienne URL existe déjà en base. Donc les nouvelles images locales (`public/signatures/president_sign.png` et `public/signatures/tresoriere_sign.png`) ne sont jamais uploadées.
 
-### Approche simplifiee
+## Solution
 
-Plutot qu'un mecanisme complexe, le plus direct :
+Forcer le re-upload des signatures depuis les assets locaux corrects. Deux actions :
 
-1. Copier le fichier dans `public/signatures/president_sign.png`
-2. Dans `src/pages/Parametres.tsx`, ajouter un `useEffect` one-shot qui, au chargement, uploade cette image vers le storage et sauvegarde l'URL dans les settings — uniquement si `president_signature_url` est vide/null
-3. Une fois uploadee, la signature apparaitra dans les Parametres et dans tous les PDF generes, avec le meme rendu proportionnel que les autres signatures
+### 1. Uploader manuellement les images correctes vers le storage et mettre à jour la base
 
-### Fichiers modifies
-- Copie de `user-uploads://Idriss_sign.png` → `public/signatures/president_sign.png`
-- `src/pages/Parametres.tsx` : ajout d'un useEffect d'auto-upload initial
+Utiliser le code existant `uploadFile` pour :
+- Fetch `public/signatures/president_sign.png` (l'image Idriss_sign.png copiée précédemment)
+- Fetch `public/signatures/tresoriere_sign.png` (l'image Gemini copiée précédemment)
+- Uploader chacune vers `kpt-files/signatures/`
+- Mettre à jour `settings_association` avec les nouvelles URLs
 
-L'image est carree (1:1), ce qui est coherent avec le systeme de rendu proportionnel deja en place — elle sera correctement mise a l'echelle dans le PDF.
+### 2. Modifier le useEffect pour détecter un changement d'asset
 
-En attente de la signature de la tresoriere pour la prochaine etape.
+Remplacer la condition `!settings.president_signature_url` par une vérification plus intelligente : comparer l'URL actuelle à un marqueur connu, ou simplement forcer un re-upload unique.
+
+**Approche retenue** : Ajouter un flag de version dans le nom de fichier local pour forcer le re-upload. Concrètement :
+- Renommer la logique pour uploader vers un chemin fixe (`signatures/president_official.png` et `signatures/tresoriere_official.png`)
+- Vérifier si l'URL actuelle contient `president_official` — si non, re-uploader
+
+### Fichier modifié
+- `src/pages/Parametres.tsx` : modifier les deux `useEffect` d'auto-upload pour forcer le remplacement des anciennes signatures par les assets locaux corrects
 
