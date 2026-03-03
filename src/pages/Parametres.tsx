@@ -82,11 +82,11 @@ export default function Parametres() {
   // Auto-upload president signature from local asset if not yet configured
   useEffect(() => {
     const autoUploadPresidentSignature = async () => {
-      if (settings && !settings.president_signature_url) {
+      if (settings && !settings.president_signature_url?.includes('president_official')) {
         try {
           const response = await fetch("/signatures/president_sign.png");
           const blob = await response.blob();
-          const file = new File([blob], `signature_president_${Date.now()}.png`, { type: "image/png" });
+          const file = new File([blob], "president_official.png", { type: "image/png" });
           const url = await uploadFile(file, "signatures");
           updateSettings({ president_signature_url: url } as any);
         } catch (e) {
@@ -100,11 +100,11 @@ export default function Parametres() {
   // Auto-upload tresoriere signature from local asset if not yet configured
   useEffect(() => {
     const autoUploadTresoriereSignature = async () => {
-      if (settings && !settings.tresoriere_signature_url) {
+      if (settings && !settings.tresoriere_signature_url?.includes('tresoriere_official')) {
         try {
           const response = await fetch("/signatures/tresoriere_sign.png");
           const blob = await response.blob();
-          const file = new File([blob], `signature_tresoriere_${Date.now()}.png`, { type: "image/png" });
+          const file = new File([blob], "tresoriere_official.png", { type: "image/png" });
           const url = await uploadFile(file, "signatures");
           updateSettings({ tresoriere_signature_url: url } as any);
         } catch (e) {
