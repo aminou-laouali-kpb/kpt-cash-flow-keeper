@@ -97,6 +97,24 @@ export default function Parametres() {
     autoUploadPresidentSignature();
   }, [settings?.president_signature_url]);
 
+  // Auto-upload tresoriere signature from local asset if not yet configured
+  useEffect(() => {
+    const autoUploadTresoriereSignature = async () => {
+      if (settings && !settings.tresoriere_signature_url) {
+        try {
+          const response = await fetch("/signatures/tresoriere_sign.png");
+          const blob = await response.blob();
+          const file = new File([blob], `signature_tresoriere_${Date.now()}.png`, { type: "image/png" });
+          const url = await uploadFile(file, "signatures");
+          updateSettings({ tresoriere_signature_url: url } as any);
+        } catch (e) {
+          console.error("Auto-upload tresoriere signature failed:", e);
+        }
+      }
+    };
+    autoUploadTresoriereSignature();
+  }, [settings?.tresoriere_signature_url]);
+
   useEffect(() => {
     if (settings) {
       form.reset({
