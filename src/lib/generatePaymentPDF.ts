@@ -264,7 +264,7 @@ export async function generatePaymentPDF(
 
   // === SECTION 4: Signatures ===
   const sigWidth = (pageWidth - margin * 2 - 10) / 3;
-  const sigBoxH = 25; // Realistic pen-signature height
+  const sigBoxH = 50; // Doubled for larger signatures
   const sigStartY = Math.max(y + 4, 180);
   const sigSectionY = drawSectionTitle(doc, "SIGNATURES", sigStartY, pageWidth);
   const sigLabels = [
