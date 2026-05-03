@@ -1,16 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { ArrowLeft, ArrowRight, Loader2, Save, Receipt, FileText } from "lucide-react";
-import { usePayments } from "@/hooks/usePayments";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ArrowLeft, ArrowRight, Loader2, Save, Receipt, FileText, AlertTriangle, Trash2 } from "lucide-react";
+import { usePayments, usePayment } from "@/hooks/usePayments";
+import { usePaymentDocuments } from "@/hooks/usePaymentDocuments";
 import { useProjects } from "@/hooks/useProjects";
 import { FileUpload } from "@/components/FileUpload";
 import { supabase } from "@/integrations/supabase/client";
@@ -68,6 +70,8 @@ type FormValues = z.infer<typeof schema>;
 export default function PaiementForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { id: editId } = useParams<{ id: string }>();
+  const isEdit = !!editId;
   const initialType = searchParams.get("type") === "recu" ? "recu_importe" : null;
   const initialProject = searchParams.get("project") || "";
 
@@ -76,9 +80,13 @@ export default function PaiementForm() {
     initialType as any
   );
   const [uploadedFiles, setUploadedFiles] = useState<{ file_url: string; file_name: string; file_type: string }[]>([]);
+  const [filesAreProof, setFilesAreProof] = useState(false);
 
-  const { createPayment, isCreating } = usePayments();
+  const { createPayment, updatePayment, isCreating } = usePayments();
   const { projects } = useProjects();
+  const { data: existingPayment } = usePayment(editId);
+  const { documents: existingDocs, deleteDocument } = usePaymentDocuments(editId);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -101,32 +109,67 @@ export default function PaiementForm() {
     },
   });
 
-  const onSubmit = async (values: FormValues) => {
-    try {
-      const payment = await createPayment({
-        ...values,
-        type: paymentType!,
-      } as any);
+  // Edit mode: preload values
+  useEffect(() => {
+    if (isEdit && existingPayment) {
+      setPaymentType(existingPayment.type as any);
+      setStep(1);
+      form.reset({
+        project_id: existingPayment.project_id || "",
+        date_paiement: existingPayment.date_paiement,
+        montant: Number(existingPayment.montant),
+        devise: existingPayment.devise,
+        categorie: existingPayment.categorie,
+        mode_paiement: existingPayment.mode_paiement,
+        beneficiaire_nom: existingPayment.beneficiaire_nom,
+        beneficiaire_telephone: existingPayment.beneficiaire_telephone || "",
+        beneficiaire_email: existingPayment.beneficiaire_email || "",
+        beneficiaire_adresse: existingPayment.beneficiaire_adresse || "",
+        beneficiaire_piece_type: existingPayment.beneficiaire_piece_type || "",
+        beneficiaire_piece_numero: existingPayment.beneficiaire_piece_numero || "",
+        motif: existingPayment.motif,
+        lieu: existingPayment.lieu || "",
+        reference_transaction: existingPayment.reference_transaction || "",
+        commentaire: existingPayment.commentaire || "",
+        personne_effectuant: existingPayment.personne_effectuant || "",
+        motif_absence_recu: existingPayment.motif_absence_recu || "",
+        autorisation_reference: existingPayment.autorisation_reference || "",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, existingPayment?.id]);
 
-      // Save documents
-      if (uploadedFiles.length > 0 && payment) {
+  const onSubmit = async (values: FormValues) => {
+    setIsSubmitting(true);
+    try {
+      let paymentId: string | undefined = editId;
+      if (isEdit && editId) {
+        await updatePayment({ id: editId, ...values } as any);
+      } else {
+        const payment: any = await createPayment({ ...values, type: paymentType! } as any);
+        paymentId = payment?.id;
+      }
+
+      if (uploadedFiles.length > 0 && paymentId) {
         for (const file of uploadedFiles) {
           await supabase.from("payment_documents").insert({
-            payment_id: (payment as any).id,
+            payment_id: paymentId,
             file_url: file.file_url,
             file_name: file.file_name,
             file_type: file.file_type,
-            type_piece: "recu",
+            type_piece: filesAreProof ? "justificatif_signature" : "recu",
           } as any);
         }
       }
 
-      navigate("/paiements");
-    } catch {}
+      navigate(isEdit ? `/paiements/${editId}` : "/paiements");
+    } catch {} finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Step 0: Choose type
-  if (step === 0 && !paymentType) {
+  // Step 0: Choose type (création uniquement)
+  if (!isEdit && step === 0 && !paymentType) {
     return (
       <div className="space-y-6 max-w-2xl">
         <div className="flex items-center gap-3">
@@ -163,16 +206,30 @@ export default function PaiementForm() {
   return (
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => step === 1 ? (paymentType === initialType ? navigate("/paiements") : (setPaymentType(null), setStep(0))) : setStep(step - 1)}>
+        <Button variant="ghost" size="icon" onClick={() => {
+          if (step > 1) { setStep(step - 1); return; }
+          if (isEdit) { navigate(`/paiements/${editId}`); return; }
+          if (paymentType === initialType) { navigate("/paiements"); return; }
+          setPaymentType(null); setStep(0);
+        }}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Nouveau paiement</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            {isEdit ? `Modifier ${existingPayment?.reference || "le paiement"}` : "Nouveau paiement"}
+          </h1>
           <p className="text-muted-foreground mt-1">
             Étape {step} sur {paymentType === "recu_importe" ? 3 : 3} — {step === 1 ? "Informations principales" : step === 2 ? "Détails complémentaires" : "Documents & confirmation"}
           </p>
         </div>
       </div>
+
+      {isEdit && existingPayment?.statut === "signe" && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <p>Cette fiche est déjà signée. Modifier un champ critique (montant, bénéficiaire, date, motif, projet) invalidera la signature du bénéficiaire.</p>
+        </div>
+      )}
 
       {/* Step indicators */}
       <div className="flex gap-2">
@@ -307,8 +364,34 @@ export default function PaiementForm() {
                 {paymentType === "recu_importe" ? "Documents justificatifs" : "Confirmation"}
               </CardTitle></CardHeader>
               <CardContent className="space-y-4">
-                {paymentType === "recu_importe" && (
-                  <FileUpload onFilesUploaded={setUploadedFiles} />
+                {isEdit && existingDocs.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Pièces déjà jointes</p>
+                    <ul className="space-y-1">
+                      {existingDocs.map(d => (
+                        <li key={d.id} className="flex items-center gap-2 text-sm bg-muted rounded p-2">
+                          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <a href={d.file_url} target="_blank" rel="noreferrer" className="flex-1 truncate underline">{d.file_name}</a>
+                          {d.type_piece === "justificatif_signature" && (
+                            <span className="text-xs text-green-700">tient lieu de signature</span>
+                          )}
+                          <Button type="button" variant="ghost" size="icon" className="h-6 w-6"
+                            onClick={() => deleteDocument(d.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(paymentType === "recu_importe" || isEdit) && (
+                  <>
+                    <FileUpload onFilesUploaded={setUploadedFiles} />
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox checked={filesAreProof} onCheckedChange={(v) => setFilesAreProof(!!v)} />
+                      <span>Ces documents tiennent lieu de signature (remplacent les signatures dans le PDF)</span>
+                    </label>
+                  </>
                 )}
                 <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
                   <h4 className="font-medium">Récapitulatif</h4>
@@ -343,9 +426,9 @@ export default function PaiementForm() {
                 Suivant <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             ) : (
-              <Button type="submit" disabled={isCreating}>
-                {isCreating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                Créer le paiement
+              <Button type="submit" disabled={isCreating || isSubmitting}>
+                {(isCreating || isSubmitting) ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                {isEdit ? "Enregistrer les modifications" : "Créer le paiement"}
               </Button>
             )}
           </div>
