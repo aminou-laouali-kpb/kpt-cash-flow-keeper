@@ -108,6 +108,7 @@ export async function generatePaymentPDF(
   settings: Settings,
   projectName?: string,
   beneficiaireSignatureUrl?: string | null,
+  proofDocuments?: { file_url: string; file_name: string; file_type?: string | null }[],
 ) {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -115,11 +116,16 @@ export async function generatePaymentPDF(
   let y = 12;
 
   // --- Load images in parallel ---
-  const [logoBase64, presidentSig, tresoriereSig, beneficiaireSig] = await Promise.all([
+  const [logoBase64, presidentSig, tresoriereSig, beneficiaireSig, proofImg] = await Promise.all([
     settings.logo_url ? loadImageAsBase64(settings.logo_url) : loadLocalImage(logoFallback),
     loadSigWithDims(settings.president_signature_url),
     loadSigWithDims(settings.tresoriere_signature_url),
     loadSigWithDims(beneficiaireSignatureUrl),
+    (async () => {
+      const firstImg = proofDocuments?.find(d => (d.file_type || "").startsWith("image/"));
+      if (!firstImg) return null;
+      return loadSigWithDims(firstImg.file_url);
+    })(),
   ]);
 
   // === HEADER: Logo + Association Info ===
@@ -263,10 +269,56 @@ export async function generatePaymentPDF(
   }
 
   // === SECTION 4: Signatures ===
+  const hasProof = (proofDocuments?.length || 0) > 0;
   const sigWidth = (pageWidth - margin * 2 - 10) / 3;
   const sigBoxH = 50; // Doubled for larger signatures
   const sigStartY = Math.max(y + 4, 180);
-  const sigSectionY = drawSectionTitle(doc, "SIGNATURES", sigStartY, pageWidth);
+  const sigSectionY = drawSectionTitle(
+    doc,
+    hasProof ? "JUSTIFICATIF TENANT LIEU DE SIGNATURE" : "SIGNATURES",
+    sigStartY,
+    pageWidth,
+  );
+
+  if (hasProof) {
+    const boxY = sigSectionY + 2;
+    const boxW = pageWidth - margin * 2;
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.4);
+    doc.rect(margin, boxY + 4, boxW, sigBoxH);
+
+    if (proofImg) {
+      try {
+        const totalW = boxW - 6;
+        const totalH = sigBoxH - 6;
+        const imgRatio = proofImg.w / proofImg.h;
+        const boxRatio = totalW / totalH;
+        let renderW: number, renderH: number;
+        if (imgRatio > boxRatio) {
+          renderW = totalW; renderH = totalW / imgRatio;
+        } else {
+          renderH = totalH; renderW = totalH * imgRatio;
+        }
+        const offsetX = margin + 3 + (totalW - renderW) / 2;
+        const offsetY = boxY + 7 + (totalH - renderH) / 2;
+        doc.addImage(proofImg.base64, "PNG", offsetX, offsetY, renderW, renderH);
+      } catch { /* ignore */ }
+    } else {
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(80, 80, 80);
+      const names = (proofDocuments || []).map(d => d.file_name).join(", ");
+      doc.text(`Pièce(s) jointe(s) : ${names}`, pageWidth / 2, boxY + sigBoxH / 2 + 2, { align: "center", maxWidth: boxW - 10 });
+    }
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(120, 120, 120);
+    doc.text(
+      "Ce justificatif tient lieu de signature des parties.",
+      pageWidth / 2, boxY + sigBoxH + 9, { align: "center" },
+    );
+  } else {
   const sigLabels = [
     { title: settings.president_fonction || "Président", name: settings.president_nom || "", sig: presidentSig },
     { title: "Bénéficiaire", name: payment.beneficiaire_nom, sig: beneficiaireSig },
@@ -325,6 +377,7 @@ export async function generatePaymentPDF(
       doc.setTextColor(150, 150, 150);
       doc.text("Non signé", x + sigWidth / 2, boxY + 25, { align: "center" });
     }
+  }
   }
 
   // === FOOTER ===
