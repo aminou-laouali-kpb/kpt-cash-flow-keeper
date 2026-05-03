@@ -6,6 +6,9 @@ import { ArrowLeft, Edit, Loader2, Trash2, Download, PenTool, Send, CheckCircle,
 import { usePayment, usePayments } from "@/hooks/usePayments";
 import { useSettings } from "@/hooks/useSettings";
 import { usePaymentSignatures, useSignatureRequests, useSignatureActions } from "@/hooks/useSignatures";
+import { usePaymentDocuments } from "@/hooks/usePaymentDocuments";
+import { FileUpload } from "@/components/FileUpload";
+import { Checkbox } from "@/components/ui/checkbox";
 import { StatusBadge } from "@/components/StatusBadge";
 import { generatePaymentPDF } from "@/lib/generatePaymentPDF";
 import { SignatureDialog } from "@/components/SignatureDialog";
@@ -44,9 +47,11 @@ export default function PaiementDetail() {
   const { data: signatures = [] } = usePaymentSignatures(id);
   const { data: requests = [] } = useSignatureRequests(id);
   const { createSignature, createSignatureRequest } = useSignatureActions();
+  const { documents, addDocument, deleteDocument } = usePaymentDocuments(id);
 
   const [signDialogOpen, setSignDialogOpen] = useState(false);
   const [sendLinkOpen, setSendLinkOpen] = useState(false);
+  const [proofAsSignature, setProofAsSignature] = useState(true);
 
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (!payment) return <div className="text-center py-12 text-muted-foreground">Paiement introuvable</div>;
@@ -58,6 +63,8 @@ export default function PaiementDetail() {
 
   const beneficiaireSig = signatures.find(s => s.signer_type === "beneficiaire" && s.is_valid);
   const pendingRequest = requests.find(r => r.status === "pending");
+  const proofDocs = documents.filter(d => d.type_piece === "justificatif_signature");
+  const hasProofSignature = proofDocs.length > 0;
 
   const handleOnSiteSign = async (name: string, dataUrl: string) => {
     // Upload signature image
@@ -148,6 +155,13 @@ export default function PaiementDetail() {
       <Card>
         <CardHeader><CardTitle className="text-lg">Signatures</CardTitle></CardHeader>
         <CardContent className="space-y-4">
+          {hasProofSignature && (
+            <div className="rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-900">
+              <p className="font-medium">Justificatif fourni — signatures non requises</p>
+              <p className="text-xs">Le PDF utilisera le justificatif joint en lieu et place des signatures.</p>
+            </div>
+          )}
+          {!hasProofSignature && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Président */}
             <div className="border rounded-lg p-4 text-center space-y-2">
@@ -192,8 +206,9 @@ export default function PaiementDetail() {
               )}
             </div>
           </div>
+          )}
 
-          {!beneficiaireSig && (
+          {!beneficiaireSig && !hasProofSignature && (
             <div className="flex gap-3 pt-2">
               <Button size="sm" onClick={() => setSignDialogOpen(true)}>
                 <PenTool className="h-4 w-4 mr-1" /> Signer sur place
@@ -203,11 +218,53 @@ export default function PaiementDetail() {
               </Button>
             </div>
           )}
+
+          {/* Justificatifs */}
+          <div className="space-y-3 pt-4 border-t">
+            <p className="text-sm font-medium">Justificatifs / pièces jointes</p>
+            {documents.length > 0 ? (
+              <ul className="space-y-2">
+                {documents.map(d => (
+                  <li key={d.id} className="flex items-center gap-2 text-sm bg-muted rounded p-2">
+                    <a href={d.file_url} target="_blank" rel="noreferrer" className="flex-1 truncate underline">{d.file_name}</a>
+                    {d.type_piece === "justificatif_signature" && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-800">tient lieu de signature</span>
+                    )}
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteDocument(d.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-muted-foreground">Aucun document joint.</p>
+            )}
+            <FileUpload
+              onFilesUploaded={async (files) => {
+                const last = files[files.length - 1];
+                if (!last) return;
+                const already = documents.some(d => d.file_url === last.file_url);
+                if (already) return;
+                await addDocument({
+                  payment_id: payment.id,
+                  file_url: last.file_url,
+                  file_name: last.file_name,
+                  file_type: last.file_type,
+                  type_piece: proofAsSignature ? "justificatif_signature" : "recu",
+                });
+              }}
+              existingFiles={[]}
+            />
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <Checkbox checked={proofAsSignature} onCheckedChange={(v) => setProofAsSignature(!!v)} />
+              <span>Marquer comme justificatif tenant lieu de signature</span>
+            </label>
+          </div>
         </CardContent>
       </Card>
 
       <div className="flex gap-3">
-        <Button variant="outline" onClick={() => payment && settings && generatePaymentPDF(payment, settings, (payment as any).projects?.nom, beneficiaireSig?.signature_image_url)}>
+        <Button variant="outline" onClick={() => payment && settings && generatePaymentPDF(payment, settings, (payment as any).projects?.nom, beneficiaireSig?.signature_image_url, proofDocs)}>
           <Download className="h-4 w-4 mr-2" /> Télécharger PDF
         </Button>
       </div>
