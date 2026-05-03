@@ -48,6 +48,7 @@ export default function PaiementDetail() {
   const { data: requests = [] } = useSignatureRequests(id);
   const { createSignature, createSignatureRequest } = useSignatureActions();
   const { documents, addDocument, deleteDocument } = usePaymentDocuments(id);
+  const { updatePayment } = usePayments();
 
   const [signDialogOpen, setSignDialogOpen] = useState(false);
   const [sendLinkOpen, setSendLinkOpen] = useState(false);
@@ -252,6 +253,9 @@ export default function PaiementDetail() {
                   file_type: last.file_type,
                   type_piece: proofAsSignature ? "justificatif_signature" : "recu",
                 });
+                if (proofAsSignature && payment.statut !== "signe") {
+                  await updatePayment({ id: payment.id, statut: "signe" } as any);
+                }
               }}
               existingFiles={[]}
             />
