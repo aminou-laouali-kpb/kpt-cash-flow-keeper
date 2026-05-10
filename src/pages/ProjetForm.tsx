@@ -61,7 +61,8 @@ export default function ProjetForm() {
 
   const onSubmit = async (values: FormValues) => {
     try {
-      const payload: any = { ...values, parent_id: values.parent_id || null, ville: values.ville || null };
+      const parent = values.parent_id && values.parent_id !== "__none__" ? values.parent_id : null;
+      const payload: any = { ...values, parent_id: parent, ville: values.ville || null };
       if (isEditing) {
         await updateProject({ id, ...payload });
       } else {
