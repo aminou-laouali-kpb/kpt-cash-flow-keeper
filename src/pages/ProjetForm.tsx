@@ -1,7 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,8 @@ type FormValues = z.infer<typeof schema>;
 export default function ProjetForm() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const parentFromUrl = searchParams.get("parent");
   const isEditing = !!id;
   const { data: project, isLoading: loadingProject } = useProject(id);
   const { createProject, updateProject, projects } = useProjects();
@@ -56,8 +58,11 @@ export default function ProjetForm() {
         parent_id: project.parent_id || "",
         ville: project.ville || "",
       });
+    } else if (parentFromUrl) {
+      form.setValue("parent_id", parentFromUrl);
+      form.setValue("type_projet", "site");
     }
-  }, [project, form]);
+  }, [project, form, parentFromUrl]);
 
   const onSubmit = async (values: FormValues) => {
     try {
