@@ -16,6 +16,9 @@ export type Project = {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  parent_id?: string | null;
+  ville?: string | null;
+  type_projet?: "programme" | "site" | "standard";
 };
 
 type ProjectInput = {
@@ -27,6 +30,9 @@ type ProjectInput = {
   responsable?: string;
   budget_previsionnel?: number;
   statut?: "actif" | "cloture";
+  parent_id?: string | null;
+  ville?: string | null;
+  type_projet?: "programme" | "site" | "standard";
 };
 
 export function useProjects() {

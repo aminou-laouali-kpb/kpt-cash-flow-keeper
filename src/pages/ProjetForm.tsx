@@ -1,7 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,9 @@ const schema = z.object({
   responsable: z.string().max(200).optional().or(z.literal("")),
   budget_previsionnel: z.coerce.number().min(0).default(0),
   statut: z.enum(["actif", "cloture"]).default("actif"),
+  type_projet: z.enum(["programme", "site", "standard"]).default("standard"),
+  parent_id: z.string().optional().or(z.literal("")),
+  ville: z.string().max(100).optional().or(z.literal("")),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -28,13 +31,16 @@ type FormValues = z.infer<typeof schema>;
 export default function ProjetForm() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const parentFromUrl = searchParams.get("parent");
   const isEditing = !!id;
   const { data: project, isLoading: loadingProject } = useProject(id);
-  const { createProject, updateProject } = useProjects();
+  const { createProject, updateProject, projects } = useProjects();
+  const programmes = projects.filter((p) => p.type_projet === "programme" && p.id !== id);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { nom: "", code: "", description: "", date_debut: "", date_fin: "", responsable: "", budget_previsionnel: 0, statut: "actif" },
+    defaultValues: { nom: "", code: "", description: "", date_debut: "", date_fin: "", responsable: "", budget_previsionnel: 0, statut: "actif", type_projet: "standard", parent_id: "", ville: "" },
   });
 
   useEffect(() => {
@@ -48,16 +54,24 @@ export default function ProjetForm() {
         responsable: project.responsable || "",
         budget_previsionnel: Number(project.budget_previsionnel),
         statut: project.statut,
+        type_projet: project.type_projet || "standard",
+        parent_id: project.parent_id || "",
+        ville: project.ville || "",
       });
+    } else if (parentFromUrl) {
+      form.setValue("parent_id", parentFromUrl);
+      form.setValue("type_projet", "site");
     }
-  }, [project, form]);
+  }, [project, form, parentFromUrl]);
 
   const onSubmit = async (values: FormValues) => {
     try {
+      const parent = values.parent_id && values.parent_id !== "__none__" ? values.parent_id : null;
+      const payload: any = { ...values, parent_id: parent, ville: values.ville || null };
       if (isEditing) {
-        await updateProject({ id, ...values } as any);
+        await updateProject({ id, ...payload });
       } else {
-        await createProject(values as any);
+        await createProject(payload);
       }
       navigate("/projets");
     } catch {}
@@ -107,6 +121,38 @@ export default function ProjetForm() {
                 )} />
                 <FormField control={form.control} name="budget_previsionnel" render={({ field }) => (
                   <FormItem><FormLabel>Budget prévisionnel (XOF)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <FormField control={form.control} name="type_projet" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Type</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="standard">Projet standard</SelectItem>
+                        <SelectItem value="programme">Programme (parent)</SelectItem>
+                        <SelectItem value="site">Site / Ville (enfant)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="parent_id" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Programme parent</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || "__none__"}>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Aucun" /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="__none__">Aucun</SelectItem>
+                        {programmes.map((p) => <SelectItem key={p.id} value={p.id}>{p.nom}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="ville" render={({ field }) => (
+                  <FormItem><FormLabel>Ville</FormLabel><FormControl><Input placeholder="ex: Niamey" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
               </div>
               {isEditing && (

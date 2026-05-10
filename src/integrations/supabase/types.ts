@@ -44,6 +44,341 @@ export type Database = {
         }
         Relationships: []
       }
+      budget_categories: {
+        Row: {
+          budget_id: string
+          code: string | null
+          created_at: string
+          id: string
+          libelle: string
+          montant_prevu: number
+          niveau: string
+          ordre: number
+          parent_id: string | null
+        }
+        Insert: {
+          budget_id: string
+          code?: string | null
+          created_at?: string
+          id?: string
+          libelle: string
+          montant_prevu?: number
+          niveau?: string
+          ordre?: number
+          parent_id?: string | null
+        }
+        Update: {
+          budget_id?: string
+          code?: string | null
+          created_at?: string
+          id?: string
+          libelle?: string
+          montant_prevu?: number
+          niveau?: string
+          ordre?: number
+          parent_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_categories_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_categories_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_budget_summary"
+            referencedColumns: ["budget_id"]
+          },
+          {
+            foreignKeyName: "budget_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "budget_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_insights: {
+        Row: {
+          budget_id: string
+          generated_at: string
+          id: string
+          insights: Json
+        }
+        Insert: {
+          budget_id: string
+          generated_at?: string
+          id?: string
+          insights: Json
+        }
+        Update: {
+          budget_id?: string
+          generated_at?: string
+          id?: string
+          insights?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_insights_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_insights_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_budget_summary"
+            referencedColumns: ["budget_id"]
+          },
+        ]
+      }
+      budget_lines: {
+        Row: {
+          budget_id: string
+          category_id: string | null
+          cost_share: number
+          cost_unitaire: number | null
+          created_at: string
+          description: string | null
+          id: string
+          justification: string | null
+          libelle: string
+          montant_prevu: number
+          ordre: number
+          quantite: number | null
+          source_row: number | null
+          villes: string[] | null
+        }
+        Insert: {
+          budget_id: string
+          category_id?: string | null
+          cost_share?: number
+          cost_unitaire?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          justification?: string | null
+          libelle: string
+          montant_prevu?: number
+          ordre?: number
+          quantite?: number | null
+          source_row?: number | null
+          villes?: string[] | null
+        }
+        Update: {
+          budget_id?: string
+          category_id?: string | null
+          cost_share?: number
+          cost_unitaire?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          justification?: string | null
+          libelle?: string
+          montant_prevu?: number
+          ordre?: number
+          quantite?: number | null
+          source_row?: number | null
+          villes?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_lines_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_lines_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_budget_summary"
+            referencedColumns: ["budget_id"]
+          },
+          {
+            foreignKeyName: "budget_lines_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "budget_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budgets: {
+        Row: {
+          created_at: string
+          created_by: string
+          devise: string
+          id: string
+          imported_at: string | null
+          montant_cost_share: number
+          montant_total: number
+          nom: string
+          project_id: string
+          source_file_name: string | null
+          source_file_url: string | null
+          source_raw: Json | null
+          status: string
+          taux_change_xof: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          devise?: string
+          id?: string
+          imported_at?: string | null
+          montant_cost_share?: number
+          montant_total?: number
+          nom: string
+          project_id: string
+          source_file_name?: string | null
+          source_file_url?: string | null
+          source_raw?: Json | null
+          status?: string
+          taux_change_xof?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          devise?: string
+          id?: string
+          imported_at?: string | null
+          montant_cost_share?: number
+          montant_total?: number
+          nom?: string
+          project_id?: string
+          source_file_name?: string | null
+          source_file_url?: string | null
+          source_raw?: Json | null
+          status?: string
+          taux_change_xof?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budgets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      categorization_rules: {
+        Row: {
+          budget_line_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          match_count: number
+          pattern: string
+        }
+        Insert: {
+          budget_line_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          match_count?: number
+          pattern: string
+        }
+        Update: {
+          budget_line_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          match_count?: number
+          pattern?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categorization_rules_budget_line_id_fkey"
+            columns: ["budget_line_id"]
+            isOneToOne: false
+            referencedRelation: "budget_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "categorization_rules_budget_line_id_fkey"
+            columns: ["budget_line_id"]
+            isOneToOne: false
+            referencedRelation: "v_budget_line_consumption"
+            referencedColumns: ["budget_line_id"]
+          },
+        ]
+      }
+      payment_budget_allocations: {
+        Row: {
+          budget_line_id: string
+          confidence: number | null
+          created_at: string
+          id: string
+          montant_alloue: number
+          montant_alloue_devise_budget: number | null
+          payment_id: string
+          reasoning: string | null
+          source: string
+          validated_at: string | null
+          validated_by: string | null
+        }
+        Insert: {
+          budget_line_id: string
+          confidence?: number | null
+          created_at?: string
+          id?: string
+          montant_alloue: number
+          montant_alloue_devise_budget?: number | null
+          payment_id: string
+          reasoning?: string | null
+          source?: string
+          validated_at?: string | null
+          validated_by?: string | null
+        }
+        Update: {
+          budget_line_id?: string
+          confidence?: number | null
+          created_at?: string
+          id?: string
+          montant_alloue?: number
+          montant_alloue_devise_budget?: number | null
+          payment_id?: string
+          reasoning?: string | null
+          source?: string
+          validated_at?: string | null
+          validated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_budget_allocations_budget_line_id_fkey"
+            columns: ["budget_line_id"]
+            isOneToOne: false
+            referencedRelation: "budget_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_budget_allocations_budget_line_id_fkey"
+            columns: ["budget_line_id"]
+            isOneToOne: false
+            referencedRelation: "v_budget_line_consumption"
+            referencedColumns: ["budget_line_id"]
+          },
+          {
+            foreignKeyName: "payment_budget_allocations_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_documents: {
         Row: {
           created_at: string
@@ -306,9 +641,12 @@ export type Database = {
           description: string | null
           id: string
           nom: string
+          parent_id: string | null
           responsable: string | null
           statut: Database["public"]["Enums"]["project_status"]
+          type_projet: string
           updated_at: string
+          ville: string | null
         }
         Insert: {
           budget_previsionnel?: number | null
@@ -320,9 +658,12 @@ export type Database = {
           description?: string | null
           id?: string
           nom: string
+          parent_id?: string | null
           responsable?: string | null
           statut?: Database["public"]["Enums"]["project_status"]
+          type_projet?: string
           updated_at?: string
+          ville?: string | null
         }
         Update: {
           budget_previsionnel?: number | null
@@ -334,11 +675,22 @@ export type Database = {
           description?: string | null
           id?: string
           nom?: string
+          parent_id?: string | null
           responsable?: string | null
           statut?: Database["public"]["Enums"]["project_status"]
+          type_projet?: string
           updated_at?: string
+          ville?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "projects_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       settings_association: {
         Row: {
@@ -470,7 +822,60 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_budget_line_consumption: {
+        Row: {
+          budget_id: string | null
+          budget_line_id: string | null
+          category_id: string | null
+          libelle: string | null
+          montant_consomme: number | null
+          montant_prevu: number | null
+          montant_restant: number | null
+          pct_consomme: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_lines_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_lines_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "v_budget_summary"
+            referencedColumns: ["budget_id"]
+          },
+          {
+            foreignKeyName: "budget_lines_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "budget_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_budget_summary: {
+        Row: {
+          budget_id: string | null
+          montant_consomme: number | null
+          montant_restant: number | null
+          montant_total: number | null
+          pct_consomme: number | null
+          project_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budgets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       generate_payment_reference: { Args: never; Returns: string }

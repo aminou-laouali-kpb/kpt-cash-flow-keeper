@@ -1,21 +1,26 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit, Loader2, Receipt, Trash2 } from "lucide-react";
+import { ArrowLeft, Edit, Loader2, Receipt, Trash2, MapPin, Wallet, Plus } from "lucide-react";
 import { useProject, useProjects } from "@/hooks/useProjects";
 import { usePayments } from "@/hooks/usePayments";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { useBudgets } from "@/hooks/useBudgets";
 
 export default function ProjetDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: project, isLoading } = useProject(id);
-  const { deleteProject } = useProjects();
+  const { deleteProject, projects } = useProjects();
   const { payments } = usePayments();
+  const { budgets } = useBudgets(id);
 
-  const projectPayments = payments.filter((p) => p.project_id === id);
+  const sites = projects.filter((p) => p.parent_id === id);
+  const siteIds = sites.map((s) => s.id);
+  const projectPayments = payments.filter((p) => p.project_id === id || siteIds.includes(p.project_id || ""));
   const totalDepenses = projectPayments.reduce((sum, p) => sum + Number(p.montant), 0);
+  const isProgramme = project?.type_projet === "programme";
 
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (!project) return <div className="text-center py-12 text-muted-foreground">Projet introuvable</div>;
@@ -65,6 +70,59 @@ export default function ProjetDetail() {
 
       {project.description && (
         <Card><CardHeader><CardTitle className="text-lg">Description</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">{project.description}</p></CardContent></Card>
+      )}
+
+      {isProgramme && (
+        <>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2"><Wallet className="h-5 w-5" /> Budget Intelligence</CardTitle>
+              <Button size="sm" onClick={() => navigate(`/budgets/nouveau?project=${id}`)}>
+                <Plus className="h-4 w-4 mr-1" /> Importer un budget
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {budgets.length === 0 ? (
+                <p className="text-center py-6 text-muted-foreground text-sm">Aucun budget importé. Importez un fichier Excel pour activer le suivi intelligent.</p>
+              ) : (
+                <div className="space-y-2">
+                  {budgets.map((b) => (
+                    <div key={b.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted" onClick={() => navigate(`/budgets/${b.id}`)}>
+                      <div>
+                        <p className="font-medium text-sm">{b.nom}</p>
+                        <p className="text-xs text-muted-foreground">{Number(b.montant_total).toLocaleString("fr-FR")} {b.devise} · {b.status}</p>
+                      </div>
+                      <Button variant="ghost" size="sm">Ouvrir</Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2"><MapPin className="h-5 w-5" /> Sites / Villes ({sites.length})</CardTitle>
+              <Button size="sm" onClick={() => navigate(`/projets/nouveau?parent=${id}`)}>
+                <Plus className="h-4 w-4 mr-1" /> Ajouter un site
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {sites.length === 0 ? (
+                <p className="text-center py-6 text-muted-foreground text-sm">Aucun site rattaché.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {sites.map((s) => (
+                    <div key={s.id} className="p-3 rounded-lg border cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/projets/${s.id}`)}>
+                      <p className="font-medium text-sm">{s.nom}</p>
+                      <p className="text-xs text-muted-foreground">{s.ville || "—"}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
       )}
 
       <Card>
