@@ -2,11 +2,12 @@ import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit, Loader2, Trash2, Download, PenTool, Send, CheckCircle, Clock, XCircle } from "lucide-react";
+import { ArrowLeft, Edit, Loader2, Trash2, Download, PenTool, Send, CheckCircle, Clock, XCircle, Sparkles, Wallet } from "lucide-react";
 import { usePayment, usePayments } from "@/hooks/usePayments";
 import { useSettings } from "@/hooks/useSettings";
 import { usePaymentSignatures, useSignatureRequests, useSignatureActions } from "@/hooks/useSignatures";
 import { usePaymentDocuments } from "@/hooks/usePaymentDocuments";
+import { usePaymentAllocations } from "@/hooks/useBudgetAllocations";
 import { FileUpload } from "@/components/FileUpload";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -49,6 +50,7 @@ export default function PaiementDetail() {
   const { createSignature, createSignatureRequest } = useSignatureActions();
   const { documents, addDocument, deleteDocument } = usePaymentDocuments(id);
   const { updatePayment } = usePayments();
+  const { allocations, suggest, isSuggesting, createAllocation, validateAllocation, deleteAllocation } = usePaymentAllocations(id);
 
   const [signDialogOpen, setSignDialogOpen] = useState(false);
   const [sendLinkOpen, setSendLinkOpen] = useState(false);
@@ -149,6 +151,77 @@ export default function PaiementDetail() {
           <InfoRow label="Effectué par" value={payment.personne_effectuant} />
           <InfoRow label="Commentaire" value={payment.commentaire} />
           <InfoRow label="Motif absence reçu" value={payment.motif_absence_recu} />
+        </CardContent>
+      </Card>
+
+      {/* Imputation budgétaire */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-lg flex items-center gap-2"><Wallet className="h-5 w-5" /> Imputation budgétaire</CardTitle>
+          {allocations.length === 0 && (
+            <Button size="sm" variant="outline" onClick={async () => {
+              const res = await suggest(payment.id);
+              const s = (res as any)?.suggestion;
+              if (!s) return;
+              await createAllocation({
+                payment_id: payment.id,
+                budget_line_id: s.budget_line_id,
+                montant_alloue: s.montant_alloue,
+                montant_alloue_devise_budget: s.montant_alloue_devise_budget,
+                confidence: s.confidence,
+                source: s.source === "rule" ? "rule" : "ia_auto",
+                reasoning: s.reasoning,
+              });
+            }} disabled={isSuggesting}>
+              {isSuggesting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />}
+              Suggérer (IA)
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {allocations.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Aucune ligne budgétaire imputée. Lancez une suggestion IA ou ajoutez manuellement depuis le budget.</p>
+          ) : (
+            allocations.map((a: any) => {
+              const validated = !!a.validated_at;
+              const conf = Number(a.confidence ?? 0);
+              const lowConf = !validated && conf < 0.7;
+              const line = a.budget_lines;
+              return (
+                <div key={a.id} className="border rounded-lg p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{line?.libelle || "Ligne supprimée"}</p>
+                      <p className="text-xs text-muted-foreground">{line?.budgets?.nom}</p>
+                      {a.reasoning && <p className="text-xs text-muted-foreground italic mt-1">"{a.reasoning}"</p>}
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="text-sm font-semibold">
+                        {Number(a.montant_alloue_devise_budget ?? a.montant_alloue).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {line?.budgets?.devise}
+                      </span>
+                      {validated ? (
+                        <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-800 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Validée</span>
+                      ) : lowConf ? (
+                        <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800">À vérifier ({Math.round(conf * 100)}%)</span>
+                      ) : (
+                        <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800">{a.source === "rule" ? "Règle" : a.source === "ia_auto" ? `IA ${Math.round(conf * 100)}%` : "Manuelle"}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {!validated && (
+                      <Button size="sm" variant="outline" onClick={() => validateAllocation(a.id)}>
+                        <CheckCircle className="h-3 w-3 mr-1" /> Valider
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={() => deleteAllocation(a.id)}>
+                      <Trash2 className="h-3 w-3 mr-1" /> Retirer
+                    </Button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </CardContent>
       </Card>
 
