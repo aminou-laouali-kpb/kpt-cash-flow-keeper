@@ -19,6 +19,7 @@ import SignaturePage from "./pages/SignaturePage";
 import SetPassword from "./pages/SetPassword";
 import BudgetImport from "./pages/BudgetImport";
 import BudgetDetail from "./pages/BudgetDetail";
+import Budgets from "./pages/Budgets";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -75,6 +76,7 @@ const App = () => (
             <Route path="/paiements/nouveau" element={<ProtectedRoute><PaiementForm /></ProtectedRoute>} />
             <Route path="/paiements/:id" element={<ProtectedRoute><PaiementDetail /></ProtectedRoute>} />
             <Route path="/paiements/:id/modifier" element={<ProtectedRoute><PaiementForm /></ProtectedRoute>} />
+            <Route path="/budgets" element={<ProtectedRoute><Budgets /></ProtectedRoute>} />
             <Route path="/budgets/nouveau" element={<ProtectedRoute><BudgetImport /></ProtectedRoute>} />
             <Route path="/budgets/:id" element={<ProtectedRoute><BudgetDetail /></ProtectedRoute>} />
             <Route path="/comptabilite" element={<ProtectedRoute><Comptabilite /></ProtectedRoute>} />
