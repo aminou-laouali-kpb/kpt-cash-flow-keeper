@@ -5,6 +5,7 @@ import {
   Settings,
   LogOut,
   FileText,
+  Wallet,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -26,6 +27,7 @@ import kptLogo from "@/assets/Cachet_KPT.png";
 const menuItems = [
   { title: "Tableau de bord", url: "/", icon: LayoutDashboard },
   { title: "Projets", url: "/projets", icon: FolderKanban },
+  { title: "Budgets", url: "/budgets", icon: Wallet },
   { title: "Paiements", url: "/paiements", icon: Receipt },
   { title: "Comptabilité", url: "/comptabilite", icon: FileText },
   { title: "Paramètres", url: "/parametres", icon: Settings },
