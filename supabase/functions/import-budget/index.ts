@@ -37,60 +37,105 @@ function parseExcelToStructure(buffer: ArrayBuffer): {
   let totalShare = 0;
   const rubriques: ParsedRubrique[] = [];
   let current: ParsedRubrique | null = null;
+  const num = (v: any) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const isBlank = (v: any) => v === null || v === undefined || (typeof v === "string" && v.trim() === "");
 
   for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row || row.every((c) => c === null || c === "")) continue;
+    const row = rows[i] || [];
+    if (row.every(isBlank)) continue;
     const c0 = row[0];
     const c1 = row[1];
+    const c2 = row[2];
+    const c4 = row[4];
+    const c7 = row[7];
 
-    // Project title row
-    if (typeof c0 === "string" && /total funds requested/i.test(c0) && typeof c1 === "number") {
-      total = c1;
-      if (typeof row[3] === "number") totalShare = row[3];
+    // Project title: row where c2 contains "Project title", title is c2 of next row
+    if (typeof c2 === "string" && /project title/i.test(c2) && !projectTitle) {
+      const next = rows[i + 1] || [];
+      if (typeof next[2] === "string" && next[2].trim()) projectTitle = next[2].trim();
+      continue;
     }
-    if (typeof c0 === "string" && /overall total project costs/i.test(c0) && typeof c1 === "number") {
-      total = total || c1;
+    // Total funds requested
+    if (typeof c2 === "string" && /total funds requested/i.test(c2)) {
+      total = num(c4) || total;
+      totalShare = num(c7) || totalShare;
+      continue;
     }
-    // Project title : usually previous row of "Total Funds Requested"
-    if (typeof c1 === "string" && c1.length > 20 && /skills|initiative|project|program/i.test(c1) && !projectTitle) {
-      projectTitle = c1;
+    // Overall total (fallback)
+    if (typeof c0 === "string" && /overall total project costs/i.test(c0)) {
+      total = total || num(c4);
+      continue;
     }
+    // Skip the " Project Costs ($USD)" totals row
+    if (typeof c0 === "string" && /project costs \(\$usd\)/i.test(c0)) continue;
 
-    // Rubrique header: (number, text)
-    if (typeof c0 === "number" && Number.isInteger(c0) && c0 < 20 && typeof c1 === "string" && c1.length > 1) {
-      current = { code: String(c0), libelle: c1, lignes: [], subtotal: 0, subtotal_cost_share: 0, justification: "" };
+    // Rubrique: c0 integer 1..20, c1 non-empty string (not "Subtotal")
+    if (
+      typeof c0 === "number" &&
+      Number.isInteger(c0) &&
+      c0 >= 1 && c0 <= 20 &&
+      typeof c1 === "string" &&
+      c1.trim().length > 0 &&
+      !/^subtotal/i.test(c1)
+    ) {
+      current = {
+        code: String(c0),
+        libelle: c1.trim(),
+        lignes: [],
+        subtotal: 0,
+        subtotal_cost_share: 0,
+        justification: "",
+      };
       rubriques.push(current);
       continue;
     }
-    // Subtotal
-    if (typeof c0 === "string" && /^subtotal/i.test(c0) && current) {
-      current.subtotal = Number(c1) || 0;
-      current.subtotal_cost_share = Number(row[2]) || 0;
+
+    // Subtotal row
+    if (current && typeof c1 === "string" && /^subtotal/i.test(c1)) {
+      current.subtotal = num(c4);
+      current.subtotal_cost_share = num(c7);
       continue;
     }
-    // Justification text (long text row right after "Budget Justification...")
-    if (typeof c0 === "string" && /justification/i.test(c0) && current) {
-      const next = rows[i + 1];
-      if (next && typeof next[0] === "string") current.justification = next[0];
+
+    // Justification header → collect following text rows (in c0) until next rubrique/subtotal
+    if (current && typeof c0 === "string" && /budget justification/i.test(c0)) {
+      const parts: string[] = [];
+      for (let j = i + 1; j < rows.length; j++) {
+        const nr = rows[j] || [];
+        const nc0 = nr[0];
+        const nc1 = nr[1];
+        // Stop on next rubrique or subtotal or new justification header
+        if (typeof nc0 === "number" && Number.isInteger(nc0)) break;
+        if (typeof nc1 === "string" && /^subtotal/i.test(nc1)) break;
+        if (typeof nc0 === "string" && /budget justification/i.test(nc0)) break;
+        if (typeof nc0 === "string" && nc0.trim().length > 0) parts.push(nc0.trim());
+      }
+      current.justification = parts.join("\n");
       continue;
     }
-    // Line: description + numbers
-    if (typeof c0 === "string" && c0.trim() && current && typeof c1 === "number" && c1 > 0) {
-      const cost = Number(c1) || 0;
-      const qty = Number(row[2]) || null;
-      const tot = Number(row[3]) || cost * (qty || 1);
-      const share = Number(row[6]) || Number(row[4]) || 0;
+
+    // Budget line: c0 blank, c1 description string, c4 total > 0
+    if (current && isBlank(c0) && typeof c1 === "string" && c1.trim().length > 0 && !/^subtotal/i.test(c1)) {
+      const total_line = num(c4);
+      if (total_line <= 0) continue;
+      const cost = num(c2) || null;
+      const qty = num(row[3]) || null;
+      const cs_total = num(c7);
       current.lignes.push({
         source_row: i + 1,
-        libelle: c0.trim(),
+        libelle: c1.trim(),
         cost_unitaire: cost,
         quantite: qty,
-        montant_prevu: tot,
-        cost_share: share,
+        montant_prevu: total_line,
+        cost_share: cs_total,
       });
     }
   }
+
+  console.log(`[import-budget] parsed: title="${projectTitle}", total=${total}, share=${totalShare}, rubriques=${rubriques.length}, lines=${rubriques.reduce((s, r) => s + r.lignes.length, 0)}`);
 
   return {
     meta: { devise: "USD", total, total_cost_share: totalShare, project_title: projectTitle },
@@ -182,6 +227,12 @@ Deno.serve(async (req) => {
 
     // Parse + enrich
     const structure = parseExcelToStructure(buf);
+    if (structure.rubriques.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Format de fichier non reconnu — vérifiez qu'il s'agit du modèle AEIF Budget Form (rubriques numérotées en colonne A, descriptions en colonne B)." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     await enrichWithAI(structure);
 
     // Insert budget
