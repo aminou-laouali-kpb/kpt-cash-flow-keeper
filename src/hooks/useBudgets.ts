@@ -118,7 +118,33 @@ export function useBudgetActions() {
     },
   });
 
-  return { activateBudget: activateBudget.mutateAsync, deleteBudget: deleteBudget.mutateAsync };
+  const batchCategorize = useMutation({
+    mutationFn: async (input: { budget_id: string; only_unallocated?: boolean }) => {
+      const { data, error } = await supabase.functions.invoke("auto-categorize-batch", {
+        body: { budget_id: input.budget_id, only_unallocated: input.only_unallocated !== false },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data as { summary: { traites: number; imputes_auto: number; a_valider: number; non_imputes: number; erreurs: number } };
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["budgets"] });
+      qc.invalidateQueries({ queryKey: ["payment_allocations"] });
+      const s = data.summary;
+      toast({
+        title: "Imputation terminée",
+        description: `${s.traites} dépenses traitées · ${s.imputes_auto} auto · ${s.a_valider} à valider · ${s.non_imputes} non imputées${s.erreurs ? ` · ${s.erreurs} erreurs` : ""}`,
+      });
+    },
+    onError: (e: any) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
+  });
+
+  return {
+    activateBudget: activateBudget.mutateAsync,
+    deleteBudget: deleteBudget.mutateAsync,
+    batchCategorize: batchCategorize.mutateAsync,
+    isBatchRunning: batchCategorize.isPending,
+  };
 }
 
 export function useBudgetConsumption(budgetId: string | undefined) {

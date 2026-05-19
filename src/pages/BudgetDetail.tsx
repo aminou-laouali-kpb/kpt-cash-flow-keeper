@@ -1,10 +1,11 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, CheckCircle2, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle2, Trash2, Sparkles } from "lucide-react";
 import { useBudget, useBudgetTree, useBudgetActions, useBudgetConsumption } from "@/hooks/useBudgets";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export default function BudgetDetail() {
   const { id } = useParams();
@@ -12,7 +13,7 @@ export default function BudgetDetail() {
   const { data: budget, isLoading } = useBudget(id);
   const { data: tree } = useBudgetTree(id);
   const { data: consumption = [] } = useBudgetConsumption(id);
-  const { activateBudget, deleteBudget } = useBudgetActions();
+  const { activateBudget, deleteBudget, batchCategorize, isBatchRunning } = useBudgetActions();
 
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (!budget) return <div className="text-center py-12 text-muted-foreground">Budget introuvable</div>;
@@ -36,6 +37,30 @@ export default function BudgetDetail() {
           <Button size="sm" onClick={async () => { await activateBudget(budget.id); }}>
             <CheckCircle2 className="h-4 w-4 mr-1" /> Activer
           </Button>
+        )}
+        {budget.status === "active" && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" variant="secondary" disabled={isBatchRunning}>
+                {isBatchRunning ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
+                Imputer les dépenses (IA)
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Imputer automatiquement les dépenses ?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  L'IA va analyser toutes les dépenses du programme qui ne sont pas encore imputées et proposer une ligne budgétaire pour chacune. Vous pourrez ensuite valider ou corriger les imputations marquées "à vérifier". L'opération peut prendre 1 à 2 minutes selon le nombre de dépenses.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction onClick={() => batchCategorize({ budget_id: budget.id, only_unallocated: true })}>
+                  Lancer l'imputation
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         )}
         <Button variant="destructive" size="sm" onClick={async () => { if (confirm("Supprimer ?")) { await deleteBudget(budget.id); navigate(-1); } }}>
           <Trash2 className="h-4 w-4" />

@@ -1,58 +1,74 @@
-## Problème identifié
+## Objectif
 
-L'import "passe" sans erreur mais ne crée aucune ligne, car le parser de `supabase/functions/import-budget/index.ts` ne correspond pas au vrai format du fichier `AEIF_2025_Budget_Form.xlsx`.
+Imputer automatiquement **chaque dépense existante et future** à une ligne du budget actif, sans clic manuel, avec un score de confiance et la possibilité pour le comptable de corriger.
 
-### Format réel du fichier (8 colonnes)
+## Contexte
 
-```
-A          B                        C       D       E         F         G       H
-[num]      Rubrique (Contractual)   —       —       —         —         —       —
-""         Description ligne        Cost$   Qty     Total$    CSCost$   CSQty   CSTotal$
-""         "Subtotal"               —       —       Total     —         —       CSTotal
-"Budget Justification (...)"        —       —       —         —         —       —
-"1. Texte de justification..."      —       —       —         —         —       —
-```
+- 1 budget actif, 13 lignes budgétaires, 44 paiements, 0 imputation à ce jour.
+- La fonction `categorize-expense` existe déjà et sait choisir 1 ligne pour 1 paiement (règles apprises + IA Gemini fallback).
+- Aujourd'hui elle ne tourne que si on clique "Suggérer" dans la fiche paiement → rien ne se passe en lot.
 
-### Bugs du parser actuel
+## Plan
 
-1. Lignes budgétaires : le code teste `c0 = string description` + `c1 = number`. En réalité `c0` est vide et la description est en `c1`, le cost en `c2`, la quantité en `c3`, le total en `c4`, le cost share en `c5/c6/c7`.
-2. Subtotal : lit `c1` au lieu de `c4` pour le montant, et `row[2]` au lieu de `row[7]` pour cost share.
-3. Total projet : ligne 5 = `"Total Funds Requested:"` est en `c2` (pas `c0`), montant en `c4` (pas `c1`), cost share en `c7`.
-4. Titre projet : `c2 = "Project title:"` et titre en `c2` de la ligne suivante (pas `c1`).
-5. Justification : le texte d'après peut être en `c0` ou se prolonger sur plusieurs lignes — on ne prend que la première.
+### 1. Auto-imputation à la création / modification d'un paiement
 
-Résultat : 0 rubrique passe la validation `c1 > 0` → import "réussi" mais vide → page budget vide.
+- Dans `usePayments.createPayment` et `updatePayment` (champs motif/montant/bénéficiaire/projet) : appeler `categorize-expense` en arrière-plan après succès.
+- Si `confidence >= 0.75` → créer directement l'allocation (`source: "ia_auto"`, non validée).
+- Si `confidence < 0.75` → créer quand même l'allocation mais la marquer "à valider" (badge orange dans la fiche).
+- Si aucune ligne trouvée → aucune allocation, badge "Non imputé" dans la liste paiements.
 
-## Plan de correction
+### 2. Nouvelle edge function `auto-categorize-batch`
 
-### 1. Réécrire `parseExcelToStructure` dans `supabase/functions/import-budget/index.ts`
+Pour traiter les 44 paiements existants en une passe (et permettre une re-catégorisation globale plus tard).
 
-- Détecter le titre projet : ligne où `c2` contient "Project title" → titre = `c2` de la ligne suivante.
-- Détecter total : ligne où `c2` contient "Total Funds Requested" → `total = c4`, `cost_share = c7`.
-- Rubrique : `c0` est un entier 1..10 ET `c1` est une string non vide → nouvelle rubrique.
-- Ligne budgétaire : `c0` vide ET `c1` string non vide ET `c1 !== "Subtotal"` ET `c4` (total) > 0 :
-  - `libelle = c1`, `cost_unitaire = c2`, `quantite = c3`, `montant_prevu = c4`
-  - `cost_share = c7 || 0`
-- Subtotal : `c1 === "Subtotal"` → `subtotal = c4`, `subtotal_cost_share = c7`.
-- Justification : ligne `c0` commence par "Budget Justification" → concaténer toutes les lignes suivantes non vides (en `c0`) jusqu'à la prochaine rubrique ou subtotal.
-- Ignorer la ligne `"Overall Total Project Costs"` et `" Project Costs ($USD)"` (totaux finaux).
+- Input : `{ budget_id, only_unallocated?: boolean, project_id?: uuid }`
+- Charge tous les paiements concernés (par défaut : ceux du programme du budget, sans allocation).
+- Pour chaque paiement, exécute la même logique que `categorize-expense` (réutiliser une fonction helper partagée, ou appeler la fonction en interne via `sb.functions.invoke`).
+- Respecte un délai entre appels IA (300 ms) pour éviter le 429.
+- Renvoie un récap : `{ traités, imputés_auto, à_valider, non_imputés, erreurs }`.
+- Logs `console.log` détaillés par paiement pour debug.
 
-### 2. Améliorations robustesse
+### 3. UI : bouton "Imputer toutes les dépenses" sur la page Budget
 
-- Logger `console.log` du nombre de rubriques / lignes parsées avant insertion (pour debug futur via edge function logs).
-- Retourner une erreur 400 explicite si 0 rubrique détectée (`"Format de fichier non reconnu — vérifiez qu'il s'agit du modèle AEIF Budget Form"`).
-- Garder la 2e feuille `"Important Budget Guidance"` ignorée (déjà le cas, on lit seulement `SheetNames[0]`).
+- Dans `BudgetDetail.tsx` (budget actif uniquement) : bouton `Sparkles` "Imputer automatiquement les dépenses".
+- Dialogue de confirmation expliquant : "L'IA va analyser toutes les dépenses du programme et proposer une ligne budgétaire pour chacune. Vous pourrez ensuite valider ou corriger."
+- Pendant traitement : barre de progression (polling toutes les 2s sur le compteur d'allocations), désactivation du bouton.
+- À la fin : toast récap + redirection vers `/paiements?filtre=à_valider`.
 
-### 3. Re-tester
+### 4. Filtre "À valider" sur la liste Paiements
 
-Tu pourras réimporter le même fichier `AEIF_2025_Budget_Form-2.xlsx`. Résultat attendu :
-- 5 rubriques (Contractual, Supplies, Travel/Lodging/Per Diem, Equipment, Other Direct Costs)
-- 13 lignes budgétaires
-- Total 23 250 USD, cost share 3 300 USD
-- Titre budget : "Niger FutureSkills Initiative: Empowering youth and women"
+- Ajouter un onglet/filter : `Tous | Imputés auto | À valider | Non imputés | Validés`.
+- Colonne "Imputation" affichant la ligne budgétaire + badge de source (`IA`, `Règle`, `Validé`).
+- Click sur une ligne "à valider" → ouvre la fiche paiement avec section imputation pré-développée.
 
-Pas de changement de schéma ni de migration DB.
+### 5. UX dans la fiche paiement
+
+- Section "Imputation budgétaire" déjà existante : ajouter
+  - Affichage du raisonnement IA (1 ligne courte).
+  - Boutons `Valider` (✓) et `Corriger` (ouvre un combobox des lignes).
+  - Sur correction manuelle → crée une `categorization_rule` (pattern = 2-3 mots clés du motif) pour apprendre.
+
+### 6. Réapprentissage automatique
+
+- Chaque fois qu'un comptable corrige une suggestion IA :
+  - Extraire 2-3 mots significatifs du motif (déjà partiellement en place).
+  - Insérer/incrémenter `categorization_rules` (pattern, budget_line_id, match_count++).
+- Pas de migration nécessaire (table existe).
+
+## Détails techniques
+
+- Aucune nouvelle table ni migration.
+- Nouvelle edge function : `supabase/functions/auto-categorize-batch/index.ts`.
+- Modifications front : `useBudgetAllocations.ts` (mutation `batchCategorize`), `BudgetDetail.tsx`, `Paiements.tsx`, `PaiementDetail.tsx`, `usePayments.ts` (hook post-create/update).
+- Modèle IA : `google/gemini-3-flash-preview` (déjà utilisé, économique et rapide).
+- Coût : ~44 appels IA pour la première passe, puis 1 appel par nouveau paiement.
+
+## Limites & garde-fous
+
+- Si pas de budget actif sur le programme → bouton désactivé avec tooltip explicatif.
+- Si paiement non lié à un projet → ignoré, listé dans "non imputés".
+- Confidence threshold (0.75) configurable dans `settings_association` plus tard si besoin.
 
 ---
 
-Bascule en mode build pour que j'applique le correctif.
+Passe en mode build pour que j'implémente.
