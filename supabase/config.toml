@@ -1,1 +1,4 @@
 project_id = "hvxohqrcrvgnmwexyzaa"
+
+[functions.public-budget-view]
+verify_jwt = false
