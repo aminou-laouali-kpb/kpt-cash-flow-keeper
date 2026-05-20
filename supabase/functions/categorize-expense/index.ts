@@ -178,10 +178,16 @@ Deno.serve(async (req) => {
       });
 
       if (aiResp.status === 429) {
-        return new Response(JSON.stringify({ error: "Trop de requêtes, réessayez dans un instant." }), { status: 429, headers: corsHeaders });
+        return new Response(
+          JSON.stringify({ error: "Trop de requêtes IA, réessayez dans un instant.", fallback: true, suggestion: null }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
       }
       if (aiResp.status === 402) {
-        return new Response(JSON.stringify({ error: "Crédits IA épuisés. Ajoutez des crédits dans Lovable Cloud." }), { status: 402, headers: corsHeaders });
+        return new Response(
+          JSON.stringify({ error: "Crédits IA épuisés. Ajoutez des crédits dans Lovable Cloud.", fallback: true, suggestion: null }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
       }
       if (!aiResp.ok) {
         const t = await aiResp.text();
