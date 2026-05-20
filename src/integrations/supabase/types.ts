@@ -211,6 +211,45 @@ export type Database = {
           },
         ]
       }
+      budget_share_links: {
+        Row: {
+          allow_export: boolean
+          budget_id: string
+          created_at: string
+          created_by: string
+          expires_at: string | null
+          id: string
+          label: string | null
+          revoked_at: string | null
+          token: string
+          view_count: number
+        }
+        Insert: {
+          allow_export?: boolean
+          budget_id: string
+          created_at?: string
+          created_by: string
+          expires_at?: string | null
+          id?: string
+          label?: string | null
+          revoked_at?: string | null
+          token?: string
+          view_count?: number
+        }
+        Update: {
+          allow_export?: boolean
+          budget_id?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string | null
+          id?: string
+          label?: string | null
+          revoked_at?: string | null
+          token?: string
+          view_count?: number
+        }
+        Relationships: []
+      }
       budgets: {
         Row: {
           created_at: string
