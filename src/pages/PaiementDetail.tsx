@@ -160,18 +160,22 @@ export default function PaiementDetail() {
           <CardTitle className="text-lg flex items-center gap-2"><Wallet className="h-5 w-5" /> Imputation budgétaire</CardTitle>
           {allocations.length === 0 && (
             <Button size="sm" variant="outline" onClick={async () => {
-              const res = await suggest(payment.id);
-              const s = (res as any)?.suggestion;
-              if (!s) return;
-              await createAllocation({
-                payment_id: payment.id,
-                budget_line_id: s.budget_line_id,
-                montant_alloue: s.montant_alloue,
-                montant_alloue_devise_budget: s.montant_alloue_devise_budget,
-                confidence: s.confidence,
-                source: s.source === "rule" ? "rule" : "ia_auto",
-                reasoning: s.reasoning,
-              });
+              try {
+                const res = await suggest(payment.id);
+                const s = (res as any)?.suggestion;
+                if (!s) return;
+                await createAllocation({
+                  payment_id: payment.id,
+                  budget_line_id: s.budget_line_id,
+                  montant_alloue: s.montant_alloue,
+                  montant_alloue_devise_budget: s.montant_alloue_devise_budget,
+                  confidence: s.confidence,
+                  source: s.source === "rule" ? "rule" : "ia_auto",
+                  reasoning: s.reasoning,
+                });
+              } catch (_) {
+                /* toast already shown by mutation onError */
+              }
             }} disabled={isSuggesting}>
               {isSuggesting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />}
               Suggérer (IA)
