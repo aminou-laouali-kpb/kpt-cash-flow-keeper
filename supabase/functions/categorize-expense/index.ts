@@ -48,31 +48,43 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Le paiement doit être lié à un projet." }), { status: 400, headers: corsHeaders });
     }
 
-    // Find programme parent (root)
-    let programmeId = project.type_projet === "programme" ? project.id : project.parent_id;
-    let ville = project.ville as string | null;
-    if (programmeId && programmeId !== project.id) {
-      const { data: parent } = await sb.from("projects").select("id, type_projet").eq("id", programmeId).single();
-      if (parent?.type_projet !== "programme") {
-        // parent is not programme, try its parent
-        programmeId = null;
-      }
-    }
-    if (!programmeId) {
-      return new Response(JSON.stringify({ error: "Aucun budget intelligent trouvé pour ce projet." }), { status: 400, headers: corsHeaders });
+    const ville = project.ville as string | null;
+
+    // Walk parent chain to find a programme
+    let programmeId: string | null = project.type_projet === "programme" ? project.id : null;
+    let currentParent = project.parent_id as string | null;
+    let safety = 0;
+    while (!programmeId && currentParent && safety < 10) {
+      const { data: parent } = await sb.from("projects").select("id, type_projet, parent_id").eq("id", currentParent).single();
+      if (!parent) break;
+      if (parent.type_projet === "programme") { programmeId = parent.id; break; }
+      currentParent = parent.parent_id;
+      safety++;
     }
 
-    // 2. Load active budget
-    const { data: budgets } = await sb
-      .from("budgets")
-      .select("*")
-      .eq("project_id", programmeId)
-      .eq("status", "active")
-      .order("created_at", { ascending: false })
-      .limit(1);
-    const budget = budgets?.[0];
+    // 2. Load active budget — prefer programme match, otherwise fall back to any active budget
+    let budget: any = null;
+    if (programmeId) {
+      const { data: budgets } = await sb
+        .from("budgets")
+        .select("*")
+        .eq("project_id", programmeId)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      budget = budgets?.[0];
+    }
     if (!budget) {
-      return new Response(JSON.stringify({ error: "Aucun budget actif pour ce programme." }), { status: 400, headers: corsHeaders });
+      const { data: allActive } = await sb
+        .from("budgets")
+        .select("*")
+        .eq("status", "active")
+        .order("created_at", { ascending: false });
+      // If a single active budget exists, use it; if several, pick most recent
+      budget = allActive?.[0];
+    }
+    if (!budget) {
+      return new Response(JSON.stringify({ error: "Aucun budget actif trouvé. Activez un budget pour permettre l'imputation." }), { status: 400, headers: corsHeaders });
     }
 
     // 3. Load lines (filter by ville if present)
