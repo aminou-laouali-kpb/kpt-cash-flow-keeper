@@ -20,6 +20,7 @@ import SetPassword from "./pages/SetPassword";
 import BudgetImport from "./pages/BudgetImport";
 import BudgetDetail from "./pages/BudgetDetail";
 import Budgets from "./pages/Budgets";
+import PublicBudget from "./pages/PublicBudget";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -66,6 +67,7 @@ const App = () => (
           <Routes>
             <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
             <Route path="/signer/:token" element={<SignaturePage />} />
+            <Route path="/public/budget/:token" element={<PublicBudget />} />
             <Route path="/set-password" element={<SetPassword />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/projets" element={<ProtectedRoute><Projets /></ProtectedRoute>} />

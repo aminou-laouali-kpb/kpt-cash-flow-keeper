@@ -1,74 +1,75 @@
-## Objectif
+# Export, partage et insights IA pour les budgets
 
-Imputer automatiquement **chaque dépense existante et future** à une ligne du budget actif, sans clic manuel, avec un score de confiance et la possibilité pour le comptable de corriger.
+## 1. Téléchargement du budget complet (PDF + Excel)
 
-## Contexte
+Bouton **"Télécharger"** sur la page `BudgetDetail` avec deux formats au choix :
 
-- 1 budget actif, 13 lignes budgétaires, 44 paiements, 0 imputation à ce jour.
-- La fonction `categorize-expense` existe déjà et sait choisir 1 ligne pour 1 paiement (règles apprises + IA Gemini fallback).
-- Aujourd'hui elle ne tourne que si on clique "Suggérer" dans la fiche paiement → rien ne se passe en lot.
+### PDF (à partager avec le bailleur)
+- En-tête : logo KPT, nom du programme, période, devise, taux de change, statut
+- Tableau récapitulatif (Prévu / Consommé / Restant / % exécution) par rubrique et par ligne
+- Code couleur : vert (<70%), orange (70–90%), rouge (>90% ou dépassement)
+- Section par rubrique listant **toutes les dépenses imputées** (date, bénéficiaire, motif, montant, source IA/règle/manuel, statut signature)
+- Section "Dépenses non imputées" pour transparence
+- Pied de page : généré le … par … · signature institutionnelle KPT
 
-## Plan
+### Excel (.xlsx)
+- Feuille 1 — *Synthèse* : rubriques + lignes avec consommation
+- Feuille 2 — *Dépenses* : toutes les dépenses imputées, une ligne = une allocation, colonnes triables/filtrables
+- Feuille 3 — *Non imputé* : dépenses du programme sans allocation
+- Formules SUM par rubrique pour rester dynamique
 
-### 1. Auto-imputation à la création / modification d'un paiement
+## 2. Lien de partage dynamique (vue bailleur)
 
-- Dans `usePayments.createPayment` et `updatePayment` (champs motif/montant/bénéficiaire/projet) : appeler `categorize-expense` en arrière-plan après succès.
-- Si `confidence >= 0.75` → créer directement l'allocation (`source: "ia_auto"`, non validée).
-- Si `confidence < 0.75` → créer quand même l'allocation mais la marquer "à valider" (badge orange dans la fiche).
-- Si aucune ligne trouvée → aucune allocation, badge "Non imputé" dans la liste paiements.
+- Bouton **"Partager"** → ouvre un dialog qui génère un **lien public en lecture seule** avec token
+- Le lien donne accès à une nouvelle page `/public/budget/:token` qui affiche la même vue synthèse que le PDF, mais **en temps réel** (mise à jour à chaque nouvelle dépense imputée)
+- Options à la création : durée de validité (7j / 30j / illimité), possibilité de révoquer, possibilité d'autoriser le téléchargement PDF/Excel depuis la page publique
+- La page publique n'expose **que** : structure budgétaire, montants, dépenses imputées avec motif/bénéficiaire/montant. **Pas** d'accès aux pièces jointes ni aux signatures internes.
+- Liste des liens actifs visible dans `BudgetDetail` avec date de création, expiration, nombre de vues, bouton "Révoquer"
 
-### 2. Nouvelle edge function `auto-categorize-batch`
+## 3. Insights IA sur le budget
 
-Pour traiter les 44 paiements existants en une passe (et permettre une re-catégorisation globale plus tard).
+Section **"Conseils de l'IA"** dans `BudgetDetail`, déclenchée par un bouton **"Analyser le budget"** (re-générable).
 
-- Input : `{ budget_id, only_unallocated?: boolean, project_id?: uuid }`
-- Charge tous les paiements concernés (par défaut : ceux du programme du budget, sans allocation).
-- Pour chaque paiement, exécute la même logique que `categorize-expense` (réutiliser une fonction helper partagée, ou appeler la fonction en interne via `sb.functions.invoke`).
-- Respecte un délai entre appels IA (300 ms) pour éviter le 429.
-- Renvoie un récap : `{ traités, imputés_auto, à_valider, non_imputés, erreurs }`.
-- Logs `console.log` détaillés par paiement pour debug.
+L'IA (`google/gemini-2.5-pro` pour qualité, fallback `gemini-3-flash-preview`) reçoit :
+- structure des rubriques + lignes + montants prévus
+- consommation actuelle par ligne
+- liste des dépenses imputées récentes
+- temps restant avant fin du projet
 
-### 3. UI : bouton "Imputer toutes les dépenses" sur la page Budget
+Et produit trois blocs :
 
-- Dans `BudgetDetail.tsx` (budget actif uniquement) : bouton `Sparkles` "Imputer automatiquement les dépenses".
-- Dialogue de confirmation expliquant : "L'IA va analyser toutes les dépenses du programme et proposer une ligne budgétaire pour chacune. Vous pourrez ensuite valider ou corriger."
-- Pendant traitement : barre de progression (polling toutes les 2s sur le compteur d'allocations), désactivation du bouton.
-- À la fin : toast récap + redirection vers `/paiements?filtre=à_valider`.
+### a) Alertes de dépassement & rééquilibrages
+Pour chaque ligne dépassée (>100%), proposer 1–3 lignes "donneuses" plausibles (sous-consommées, même rubrique de préférence) avec montant suggéré à transférer. Bouton **"Préparer le réajustement"** qui crée une note interne (pas de modif auto du budget).
 
-### 4. Filtre "À valider" sur la liste Paiements
+### b) Recommandations de dépenses
+Pour les lignes sous-consommées avec peu de temps restant, suggérer **types de dépenses concrètes** alignées avec le libellé/justification de la ligne et le contexte du programme (ex : "Ligne *Formation des formateurs* sous-utilisée à 30% — organiser un module additionnel à Niamey, ~X XOF").
 
-- Ajouter un onglet/filter : `Tous | Imputés auto | À valider | Non imputés | Validés`.
-- Colonne "Imputation" affichant la ligne budgétaire + badge de source (`IA`, `Règle`, `Validé`).
-- Click sur une ligne "à valider" → ouvre la fiche paiement avec section imputation pré-développée.
+### c) Synthèse exécutive
+2–3 paragraphes : santé globale du budget, risques, priorités des 30 prochains jours.
 
-### 5. UX dans la fiche paiement
-
-- Section "Imputation budgétaire" déjà existante : ajouter
-  - Affichage du raisonnement IA (1 ligne courte).
-  - Boutons `Valider` (✓) et `Corriger` (ouvre un combobox des lignes).
-  - Sur correction manuelle → crée une `categorization_rule` (pattern = 2-3 mots clés du motif) pour apprendre.
-
-### 6. Réapprentissage automatique
-
-- Chaque fois qu'un comptable corrige une suggestion IA :
-  - Extraire 2-3 mots significatifs du motif (déjà partiellement en place).
-  - Insérer/incrémenter `categorization_rules` (pattern, budget_line_id, match_count++).
-- Pas de migration nécessaire (table existe).
+Les insights sont **stockés** dans la table `budget_insights` (déjà existante) → cache + historique. Re-génération possible à tout moment.
 
 ## Détails techniques
 
-- Aucune nouvelle table ni migration.
-- Nouvelle edge function : `supabase/functions/auto-categorize-batch/index.ts`.
-- Modifications front : `useBudgetAllocations.ts` (mutation `batchCategorize`), `BudgetDetail.tsx`, `Paiements.tsx`, `PaiementDetail.tsx`, `usePayments.ts` (hook post-create/update).
-- Modèle IA : `google/gemini-3-flash-preview` (déjà utilisé, économique et rapide).
-- Coût : ~44 appels IA pour la première passe, puis 1 appel par nouveau paiement.
+**Nouvelle table** : `budget_share_links` (`id`, `budget_id`, `token`, `expires_at`, `allow_export bool`, `view_count`, `created_by`, `revoked_at`).
+RLS : admin/comptable manage ; anon SELECT via token (similaire à `signature_requests`).
 
-## Limites & garde-fous
+**Nouvelles RLS anon** sur `budgets`, `budget_categories`, `budget_lines`, `payments`, `payment_budget_allocations` : SELECT autorisé si le budget est référencé par un `budget_share_links` actif (token vérifié côté client par edge function).
 
-- Si pas de budget actif sur le programme → bouton désactivé avec tooltip explicatif.
-- Si paiement non lié à un projet → ignoré, listé dans "non imputés".
-- Confidence threshold (0.75) configurable dans `settings_association` plus tard si besoin.
+**Edge functions** :
+- `export-budget` : génère PDF (jsPDF + autoTable) ou XLSX (xlsx package), retourne base64
+- `budget-insights` : appelle l'IA avec le contexte, valide la réponse via JSON schema, écrit dans `budget_insights`
+- `public-budget-view` : prend un token, retourne la vue agrégée (contourne les RLS via service role + vérif token)
 
----
+**Frontend** :
+- `BudgetDetail.tsx` : 2 nouveaux boutons (Télécharger ▾, Partager), 1 carte "Conseils IA"
+- `src/pages/PublicBudget.tsx` (nouvelle route `/public/budget/:token`, hors AppLayout)
+- `src/hooks/useBudgetShares.ts`, `useBudgetInsights.ts`, `useBudgetExport.ts`
 
-Passe en mode build pour que j'implémente.
+**Pas de changement** sur l'imputation existante.
+
+## Hors scope (à confirmer)
+
+- Modification automatique des montants prévus par l'IA → **non** : l'IA propose, l'humain valide manuellement (sécurité comptable)
+- Notifications email au bailleur quand le budget est mis à jour → à voir plus tard
+- Multi-bailleurs avec vues filtrées par sous-budget → à voir plus tard
