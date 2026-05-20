@@ -4,21 +4,22 @@ import { useMutation } from "@tanstack/react-query";
 import { generateBudgetPDF, generateBudgetXLSX, type BudgetExportData } from "@/lib/budgetExport";
 
 async function loadExportData(budgetId: string): Promise<BudgetExportData> {
-  const [budgetRes, catsRes, linesRes, consRes, allocsRes] = await Promise.all([
+  const [budgetRes, catsRes, linesRes, consRes] = await Promise.all([
     supabase.from("budgets").select("*, projects(nom, id)").eq("id", budgetId).single(),
     supabase.from("budget_categories").select("*").eq("budget_id", budgetId).order("ordre"),
     supabase.from("budget_lines").select("*").eq("budget_id", budgetId).order("ordre"),
     supabase.from("v_budget_line_consumption").select("*").eq("budget_id", budgetId),
-    supabase
-      .from("payment_budget_allocations")
-      .select("id, budget_line_id, montant_alloue, montant_alloue_devise_budget, source, confidence, budget_id, payments(reference, date_paiement, beneficiaire_nom, motif, devise, montant, project_id)")
-      .eq("budget_id", budgetId),
   ]);
   if (budgetRes.error) throw budgetRes.error;
   const budget = budgetRes.data as any;
   const projectId = budget.project_id;
-  // Load unallocated payments for the programme
-  const allocPaymentIds = new Set((allocsRes.data || []).map((a: any) => a.payments?.reference).filter(Boolean));
+  const lineIds = (linesRes.data || []).map((l: any) => l.id);
+  const allocsRes = lineIds.length
+    ? await supabase
+        .from("payment_budget_allocations")
+        .select("id, budget_line_id, montant_alloue, montant_alloue_devise_budget, source, confidence, payments(reference, date_paiement, beneficiaire_nom, motif, devise, montant, project_id)")
+        .in("budget_line_id", lineIds)
+    : { data: [] as any[], error: null };
   const { data: paymentsForProject } = await supabase
     .from("payments")
     .select("id, reference, date_paiement, beneficiaire_nom, motif, montant, devise, project_id, projects(parent_id)")
@@ -63,7 +64,7 @@ export function useBudgetExport() {
     mutationFn: async (budgetId: string) => {
       const data = await loadExportData(budgetId);
       const buf = generateBudgetXLSX(data);
-      const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const blob = new Blob([new Uint8Array(buf)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = `Budget-${data.budget.nom.replace(/[^a-z0-9]/gi, "_")}-${new Date().toISOString().slice(0, 10)}.xlsx`;
