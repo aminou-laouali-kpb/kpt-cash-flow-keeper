@@ -65,13 +65,9 @@ export function useSignatureByToken(token: string | undefined) {
     queryKey: ["signature_request_token", token],
     queryFn: async () => {
       if (!token) return null;
-      const { data, error } = await supabase
-        .from("signature_requests")
-        .select("*, payments(*, projects(nom))")
-        .eq("token", token)
-        .single();
+      const { data, error } = await supabase.rpc("get_signature_request_by_token", { _token: token });
       if (error) throw error;
-      return data;
+      return data as any;
     },
     enabled: !!token,
   });
