@@ -15,6 +15,7 @@ import { usePayments, usePayment } from "@/hooks/usePayments";
 import { usePaymentDocuments } from "@/hooks/usePaymentDocuments";
 import { useProjects } from "@/hooks/useProjects";
 import { FileUpload } from "@/components/FileUpload";
+import { SignedLink } from "@/components/SignedLink";
 import { supabase } from "@/integrations/supabase/client";
 
 const categories = [
