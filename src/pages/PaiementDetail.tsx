@@ -16,6 +16,7 @@ import { SignatureDialog } from "@/components/SignatureDialog";
 import { SendSignatureLink } from "@/components/SendSignatureLink";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { ManualAllocationDialog } from "@/components/ManualAllocationDialog";
 
 const categoryLabels: Record<string, string> = {
   fournitures: "Fournitures", transport: "Transport", restauration: "Restauration",
@@ -55,6 +56,7 @@ export default function PaiementDetail() {
   const [signDialogOpen, setSignDialogOpen] = useState(false);
   const [sendLinkOpen, setSendLinkOpen] = useState(false);
   const [proofAsSignature, setProofAsSignature] = useState(true);
+  const [manualAllocOpen, setManualAllocOpen] = useState(false);
 
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (!payment) return <div className="text-center py-12 text-muted-foreground">Paiement introuvable</div>;
@@ -158,7 +160,10 @@ export default function PaiementDetail() {
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">
           <CardTitle className="text-lg flex items-center gap-2"><Wallet className="h-5 w-5" /> Imputation budgétaire</CardTitle>
-          {allocations.length === 0 && (
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setManualAllocOpen(true)}>
+              <Wallet className="h-4 w-4 mr-1" /> Imputer manuellement
+            </Button>
             <Button size="sm" variant="outline" onClick={async () => {
               try {
                 const res = await suggest(payment.id);
@@ -180,9 +185,20 @@ export default function PaiementDetail() {
               {isSuggesting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />}
               Suggérer (IA)
             </Button>
-          )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          {allocations.length > 0 && (() => {
+            const totalAlloue = allocations.reduce((s: number, a: any) => s + Number(a.montant_alloue || 0), 0);
+            const montantPayment = Number(payment.montant || 0);
+            const restant = Math.max(0, montantPayment - totalAlloue);
+            return (
+              <p className="text-xs text-muted-foreground">
+                Imputé : {totalAlloue.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} / {montantPayment.toLocaleString("fr-FR")} {payment.devise}
+                {restant > 0 && <> · Restant : {restant.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {payment.devise}</>}
+              </p>
+            );
+          })()}
           {allocations.length === 0 ? (
             <p className="text-sm text-muted-foreground">Aucune ligne budgétaire imputée. Lancez une suggestion IA ou ajoutez manuellement depuis le budget.</p>
           ) : (
