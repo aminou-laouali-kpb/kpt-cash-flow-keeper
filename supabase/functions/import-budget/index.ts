@@ -215,15 +215,23 @@ Deno.serve(async (req) => {
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    const { project_id, file_url, file_name, taux_change_xof } = await req.json();
-    if (!project_id || !file_url) {
-      return new Response(JSON.stringify({ error: "project_id et file_url requis" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const body = await req.json();
+    const { project_id, file_path, file_url, file_name, taux_change_xof } = body;
+    if (!project_id || (!file_path && !file_url)) {
+      return new Response(JSON.stringify({ error: "project_id et file_path requis" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Fetch the file from storage URL
-    const fileRes = await fetch(file_url);
-    if (!fileRes.ok) throw new Error("Impossible de télécharger le fichier");
-    const buf = await fileRes.arrayBuffer();
+    // Download via service-role storage API (bucket is private)
+    let buf: ArrayBuffer;
+    if (file_path) {
+      const { data: blob, error: dlErr } = await supabase.storage.from("kpt-files").download(file_path);
+      if (dlErr || !blob) throw new Error(`Impossible de télécharger le fichier: ${dlErr?.message || "inconnu"}`);
+      buf = await blob.arrayBuffer();
+    } else {
+      const fileRes = await fetch(file_url);
+      if (!fileRes.ok) throw new Error("Impossible de télécharger le fichier");
+      buf = await fileRes.arrayBuffer();
+    }
 
     // Parse + enrich
     const structure = parseExcelToStructure(buf);
@@ -245,7 +253,7 @@ Deno.serve(async (req) => {
         taux_change_xof: taux_change_xof || 600,
         montant_total: structure.meta.total,
         montant_cost_share: structure.meta.total_cost_share,
-        source_file_url: file_url,
+        source_file_url: file_path || file_url,
         source_file_name: file_name,
         source_raw: structure.raw.slice(0, 200),
         status: "draft",

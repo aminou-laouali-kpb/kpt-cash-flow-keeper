@@ -37,8 +37,8 @@ export function FileUpload({ onFilesUploaded, existingFiles = [], maxFiles = 5, 
         const path = `documents/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
         const { error } = await supabase.storage.from("kpt-files").upload(path, file);
         if (error) throw error;
-        const { data } = supabase.storage.from("kpt-files").getPublicUrl(path);
-        uploaded.push({ file_url: data.publicUrl, file_name: file.name, file_type: file.type });
+        // Bucket is private — store the storage path; consumers sign on demand.
+        uploaded.push({ file_url: path, file_name: file.name, file_type: file.type });
       }
       const newFiles = [...files, ...uploaded];
       setFiles(newFiles);

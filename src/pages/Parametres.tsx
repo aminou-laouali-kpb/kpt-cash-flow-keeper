@@ -12,6 +12,7 @@ import { Loader2, Save, Upload, X } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
 import InviteUserSection from "@/components/InviteUserSection";
 import { SignatureUpload } from "@/components/SignatureUpload";
+import { signFileUrl } from "@/lib/storageUrl";
 
 const schema = z.object({
   nom: z.string().min(1, "Requis").max(200),
@@ -30,10 +31,17 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 function ImageUpload({ label, currentUrl, onUpload }: { label: string; currentUrl: string | null; onUpload: (file: File) => Promise<void> }) {
-  const [preview, setPreview] = useState<string | null>(currentUrl);
+  const [preview, setPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  useEffect(() => { setPreview(currentUrl); }, [currentUrl]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const url = await signFileUrl(currentUrl, 3600);
+      if (!cancelled) setPreview(url);
+    })();
+    return () => { cancelled = true; };
+  }, [currentUrl]);
 
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

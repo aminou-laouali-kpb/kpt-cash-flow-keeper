@@ -17,6 +17,8 @@ import { SendSignatureLink } from "@/components/SendSignatureLink";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { ManualAllocationDialog } from "@/components/ManualAllocationDialog";
+import { SignedImage } from "@/components/SignedImage";
+import { SignedLink } from "@/components/SignedLink";
 
 const categoryLabels: Record<string, string> = {
   fournitures: "Fournitures", transport: "Transport", restauration: "Restauration",
@@ -77,13 +79,13 @@ export default function PaiementDetail() {
     const blob = await (await fetch(dataUrl)).blob();
     const { error: uploadError } = await supabase.storage.from("kpt-files").upload(fileName, blob, { contentType: "image/png" });
     if (uploadError) throw uploadError;
-    const { data: urlData } = supabase.storage.from("kpt-files").getPublicUrl(fileName);
 
+    // Bucket is private — store the storage path; consumers sign on demand.
     await createSignature({
       payment_id: payment.id,
       signer_type: "beneficiaire",
       signer_name: name,
-      signature_image_url: urlData.publicUrl,
+      signature_image_url: fileName,
     });
   };
 
@@ -262,7 +264,7 @@ export default function PaiementDetail() {
               <p className="text-sm font-medium">{settings?.president_fonction || "Président"}</p>
               <p className="text-xs text-muted-foreground">{settings?.president_nom || "—"}</p>
               {settings?.president_signature_url ? (
-                <img src={settings.president_signature_url} alt="Signature Président" className="h-16 mx-auto object-contain" />
+                <SignedImage src={settings.president_signature_url} alt="Signature Président" className="h-16 mx-auto object-contain" />
               ) : (
                 <div className="h-16 flex items-center justify-center text-muted-foreground text-xs">Non configurée</div>
               )}
@@ -274,7 +276,7 @@ export default function PaiementDetail() {
               <p className="text-xs text-muted-foreground">{payment.beneficiaire_nom}</p>
               {beneficiaireSig ? (
                 <>
-                  <img src={beneficiaireSig.signature_image_url || ""} alt="Signature" className="h-16 mx-auto object-contain" />
+                  <SignedImage src={beneficiaireSig.signature_image_url || ""} alt="Signature" className="h-16 mx-auto object-contain" />
                   <div className="flex items-center justify-center gap-1 text-xs text-green-600">
                     <CheckCircle className="h-3 w-3" /> Signé
                   </div>
@@ -294,7 +296,7 @@ export default function PaiementDetail() {
               <p className="text-sm font-medium">{settings?.tresoriere_fonction || "Trésorière"}</p>
               <p className="text-xs text-muted-foreground">{settings?.tresoriere_nom || "—"}</p>
               {settings?.tresoriere_signature_url ? (
-                <img src={settings.tresoriere_signature_url} alt="Signature Trésorière" className="h-16 mx-auto object-contain" />
+                <SignedImage src={settings.tresoriere_signature_url} alt="Signature Trésorière" className="h-16 mx-auto object-contain" />
               ) : (
                 <div className="h-16 flex items-center justify-center text-muted-foreground text-xs">Non configurée</div>
               )}
@@ -320,7 +322,7 @@ export default function PaiementDetail() {
               <ul className="space-y-2">
                 {documents.map(d => (
                   <li key={d.id} className="flex items-center gap-2 text-sm bg-muted rounded p-2">
-                    <a href={d.file_url} target="_blank" rel="noreferrer" className="flex-1 truncate underline">{d.file_name}</a>
+                    <SignedLink src={d.file_url} className="flex-1 truncate underline">{d.file_name}</SignedLink>
                     {d.type_piece === "justificatif_signature" && (
                       <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-800">tient lieu de signature</span>
                     )}

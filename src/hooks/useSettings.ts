@@ -34,7 +34,13 @@ export function useSettings() {
         .limit(1)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        // Read-only users can't read settings_association directly (admin/comptable only).
+        // Fallback to the public header RPC for safe display fields.
+        const { data: pub } = await supabase.rpc("get_settings_public_header" as any);
+        if (pub) return pub as Settings;
+        throw error;
+      }
 
       if (!data) {
         const { data: newData, error: insertError } = await supabase
@@ -42,7 +48,11 @@ export function useSettings() {
           .insert({ nom: "Karaté Pour Tous (KPT)" })
           .select()
           .single();
-        if (insertError) throw insertError;
+        if (insertError) {
+          const { data: pub } = await supabase.rpc("get_settings_public_header" as any);
+          if (pub) return pub as Settings;
+          throw insertError;
+        }
         return newData as Settings;
       }
 
@@ -77,8 +87,8 @@ export function useSettings() {
     const fileName = `${path}/${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("kpt-files").upload(fileName, file, { upsert: true });
     if (error) throw error;
-    const { data } = supabase.storage.from("kpt-files").getPublicUrl(fileName);
-    return data.publicUrl;
+    // Bucket is private — store the storage path; consumers sign on demand.
+    return fileName;
   };
 
   return {

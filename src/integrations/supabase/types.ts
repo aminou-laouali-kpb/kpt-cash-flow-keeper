@@ -918,6 +918,7 @@ export type Database = {
     }
     Functions: {
       generate_payment_reference: { Args: never; Returns: string }
+      get_settings_public_header: { Args: never; Returns: Json }
       get_signature_request_by_token: {
         Args: { _token: string }
         Returns: Json
