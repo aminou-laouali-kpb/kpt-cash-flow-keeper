@@ -381,6 +381,25 @@ export default function PaiementDetail() {
         beneficiaireTelephone={payment.beneficiaire_telephone}
         onCreateRequest={handleCreateRequest}
       />
+
+      <ManualAllocationDialog
+        open={manualAllocOpen}
+        onOpenChange={setManualAllocOpen}
+        payment={payment}
+        remaining={Math.max(0, Number(payment.montant || 0) - allocations.reduce((s: number, a: any) => s + Number(a.montant_alloue || 0), 0))}
+        onConfirm={async ({ budget_line_id, montant_alloue, montant_alloue_devise_budget, reasoning }) => {
+          await createAllocation({
+            payment_id: payment.id,
+            budget_line_id,
+            montant_alloue,
+            montant_alloue_devise_budget,
+            confidence: 1,
+            source: "manual",
+            reasoning,
+            validated: true,
+          });
+        }}
+      />
     </div>
   );
 }
