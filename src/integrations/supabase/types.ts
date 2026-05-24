@@ -918,12 +918,28 @@ export type Database = {
     }
     Functions: {
       generate_payment_reference: { Args: never; Returns: string }
+      get_signature_request_by_token: {
+        Args: { _token: string }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      refuse_signature_via_token: {
+        Args: { _reason: string; _token: string }
+        Returns: undefined
+      }
+      sign_payment_via_token: {
+        Args: {
+          _signature_image_url: string
+          _signer_name: string
+          _token: string
+        }
+        Returns: undefined
       }
     }
     Enums: {
