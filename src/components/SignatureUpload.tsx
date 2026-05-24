@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SignatureCanvas } from "@/components/SignatureCanvas";
 import { Upload, X, Pen } from "lucide-react";
+import { signFileUrl } from "@/lib/storageUrl";
 
 interface SignatureUploadProps {
   label: string;
@@ -12,11 +13,18 @@ interface SignatureUploadProps {
 }
 
 export function SignatureUpload({ label, currentUrl, onUpload, onDrawn }: SignatureUploadProps) {
-  const [preview, setPreview] = useState<string | null>(currentUrl);
+  const [preview, setPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [tab, setTab] = useState<string>("draw");
 
-  useEffect(() => { setPreview(currentUrl); }, [currentUrl]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const url = await signFileUrl(currentUrl, 3600);
+      if (!cancelled) setPreview(url);
+    })();
+    return () => { cancelled = true; };
+  }, [currentUrl]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

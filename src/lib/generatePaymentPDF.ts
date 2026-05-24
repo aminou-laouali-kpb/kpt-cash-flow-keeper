@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import { Payment } from "@/hooks/usePayments";
 import { Settings } from "@/hooks/useSettings";
 import logoFallback from "@/assets/Cachet_KPT.png";
+import { signFileUrl } from "@/lib/storageUrl";
 
 const categoryLabels: Record<string, string> = {
   fournitures: "Fournitures", transport: "Transport", restauration: "Restauration",
@@ -30,7 +31,9 @@ function formatMontant(montant: number, devise: string): string {
 
 async function loadImageAsBase64(url: string): Promise<string | null> {
   try {
-    const response = await fetch(url, { mode: "cors" });
+    // Resolve stored bucket paths / legacy public URLs to short-lived signed URLs.
+    const resolved = (await signFileUrl(url, 600)) || url;
+    const response = await fetch(resolved, { mode: "cors" });
     if (!response.ok) return null;
     const blob = await response.blob();
     return new Promise((resolve) => {
