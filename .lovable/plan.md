@@ -1,75 +1,74 @@
-# Export, partage et insights IA pour les budgets
+## Objectif
 
-## 1. Téléchargement du budget complet (PDF + Excel)
+1. Permettre la sélection **manuelle** d'une rubrique budgétaire lors de l'imputation d'un paiement (l'IA seule n'est pas assez précise).
+2. Rendre les fonctionnalités IA (suggestion d'imputation, conseils budget, partage…) accessibles à **tous les utilisateurs connectés**, et pas seulement aux rôles `admin` / `comptable`.
 
-Bouton **"Télécharger"** sur la page `BudgetDetail` avec deux formats au choix :
+---
 
-### PDF (à partager avec le bailleur)
-- En-tête : logo KPT, nom du programme, période, devise, taux de change, statut
-- Tableau récapitulatif (Prévu / Consommé / Restant / % exécution) par rubrique et par ligne
-- Code couleur : vert (<70%), orange (70–90%), rouge (>90% ou dépassement)
-- Section par rubrique listant **toutes les dépenses imputées** (date, bénéficiaire, motif, montant, source IA/règle/manuel, statut signature)
-- Section "Dépenses non imputées" pour transparence
-- Pied de page : généré le … par … · signature institutionnelle KPT
+## 1. Sélection manuelle de la rubrique sur une dépense
 
-### Excel (.xlsx)
-- Feuille 1 — *Synthèse* : rubriques + lignes avec consommation
-- Feuille 2 — *Dépenses* : toutes les dépenses imputées, une ligne = une allocation, colonnes triables/filtrables
-- Feuille 3 — *Non imputé* : dépenses du programme sans allocation
-- Formules SUM par rubrique pour rester dynamique
+Dans `PaiementDetail.tsx` → carte « Imputation budgétaire » :
 
-## 2. Lien de partage dynamique (vue bailleur)
+- Ajouter un bouton **« Imputer manuellement »** à côté du bouton « Suggérer (IA) ».
+- Ouvre un `Dialog` qui permet de :
+  - Choisir le **budget actif** (Select, pré-sélectionne celui du programme parent du projet quand il existe).
+  - Choisir la **rubrique parente** (catégorie) — Select alimenté depuis `budget_categories` du budget choisi.
+  - Choisir la **ligne budgétaire** finale — Select filtré par la rubrique (et par ville du projet si renseignée, avec option « toutes villes »).
+  - Saisir le **montant alloué** (pré-rempli avec le montant restant à imputer du paiement, conversion XOF↔USD automatique selon devise du budget).
+  - Champ optionnel **commentaire** (stocké dans `reasoning`).
+- À la validation : insertion dans `payment_budget_allocations` avec `source = "manual"`, `confidence = 1`, `validated_by`/`validated_at` remplis.
+- Le bouton reste disponible même quand une imputation existe déjà (permet l'imputation **multi-lignes** d'un même paiement).
+- Petit récap au-dessus de la liste : « X / Y imputé » (somme des allocations vs. montant du paiement) pour guider la répartition.
 
-- Bouton **"Partager"** → ouvre un dialog qui génère un **lien public en lecture seule** avec token
-- Le lien donne accès à une nouvelle page `/public/budget/:token` qui affiche la même vue synthèse que le PDF, mais **en temps réel** (mise à jour à chaque nouvelle dépense imputée)
-- Options à la création : durée de validité (7j / 30j / illimité), possibilité de révoquer, possibilité d'autoriser le téléchargement PDF/Excel depuis la page publique
-- La page publique n'expose **que** : structure budgétaire, montants, dépenses imputées avec motif/bénéficiaire/montant. **Pas** d'accès aux pièces jointes ni aux signatures internes.
-- Liste des liens actifs visible dans `BudgetDetail` avec date de création, expiration, nombre de vues, bouton "Révoquer"
+Nouveau hook `useBudgetLinesForPicker(budgetId)` (ou extension de `useBudgets`) pour charger budgets actifs + catégories + lignes en une seule requête, mis en cache via React Query.
 
-## 3. Insights IA sur le budget
+Aucune modification du schéma DB nécessaire — la table `payment_budget_allocations` accepte déjà `source = "manual"`.
 
-Section **"Conseils de l'IA"** dans `BudgetDetail`, déclenchée par un bouton **"Analyser le budget"** (re-générable).
+---
 
-L'IA (`google/gemini-2.5-pro` pour qualité, fallback `gemini-3-flash-preview`) reçoit :
-- structure des rubriques + lignes + montants prévus
-- consommation actuelle par ligne
-- liste des dépenses imputées récentes
-- temps restant avant fin du projet
+## 2. Ouvrir l'IA à tous les utilisateurs
 
-Et produit trois blocs :
+Aujourd'hui les rôles `lecture_seule` ne peuvent ni déclencher la suggestion IA, ni voir les insights budget car les RLS / les edge functions limitent à `admin` + `comptable`.
 
-### a) Alertes de dépassement & rééquilibrages
-Pour chaque ligne dépassée (>100%), proposer 1–3 lignes "donneuses" plausibles (sous-consommées, même rubrique de préférence) avec montant suggéré à transférer. Bouton **"Préparer le réajustement"** qui crée une note interne (pas de modif auto du budget).
+### Edge functions
+- `categorize-expense`, `budget-insights`, `auto-categorize-batch` : retirer toute vérification de rôle, garder uniquement la vérification **utilisateur connecté** (JWT valide). L'écriture en base reste faite côté serveur via service role, donc on contrôle ce qui est inséré.
 
-### b) Recommandations de dépenses
-Pour les lignes sous-consommées avec peu de temps restant, suggérer **types de dépenses concrètes** alignées avec le libellé/justification de la ligne et le contexte du programme (ex : "Ligne *Formation des formateurs* sous-utilisée à 30% — organiser un module additionnel à Niamey, ~X XOF").
+### RLS
+- `payment_budget_allocations` : ouvrir l'**INSERT** (allocations issues de l'IA) à tout utilisateur authentifié. L'UPDATE/DELETE manuels restent réservés à `admin` + `comptable` pour éviter qu'un lecteur supprime/modifie une imputation validée.
+- `budget_insights` : ouvrir l'INSERT à tout utilisateur authentifié (la lecture l'est déjà). UPDATE/DELETE restent admin/comptable.
+- `categorization_rules` : l'INSERT (apprentissage) passe à tout authentifié.
+- `budget_share_links` : la **création** d'un lien de partage reste réservée à admin/comptable (action de gouvernance), mais la **lecture** est déjà ouverte — pas de changement.
 
-### c) Synthèse exécutive
-2–3 paragraphes : santé globale du budget, risques, priorités des 30 prochains jours.
+### Frontend
+- `PaiementDetail.tsx` / `BudgetDetail.tsx` : supprimer les conditions `isAdminOrComptable` qui masquent les boutons « Suggérer (IA) », « Analyser le budget », « Conseils IA ». Garder cette restriction uniquement sur les actions destructives (supprimer une imputation, modifier le budget, créer un lien de partage).
+- La sélection manuelle décrite au §1 reste, elle, réservée à admin/comptable (action de saisie comptable).
 
-Les insights sont **stockés** dans la table `budget_insights` (déjà existante) → cache + historique. Re-génération possible à tout moment.
+---
 
 ## Détails techniques
 
-**Nouvelle table** : `budget_share_links` (`id`, `budget_id`, `token`, `expires_at`, `allow_export bool`, `view_count`, `created_by`, `revoked_at`).
-RLS : admin/comptable manage ; anon SELECT via token (similaire à `signature_requests`).
+```text
+Fichiers modifiés :
+  src/pages/PaiementDetail.tsx            — bouton + dialog manuel, suppression gating IA
+  src/pages/BudgetDetail.tsx              — suppression gating IA sur insights
+  src/hooks/useBudgetAllocations.ts       — pas de changement majeur (createAllocation existe déjà)
+  src/hooks/useBudgets.ts (ou nouveau)    — loader rubriques + lignes pour le picker
+  supabase/functions/categorize-expense/index.ts
+  supabase/functions/budget-insights/index.ts
+  supabase/functions/auto-categorize-batch/index.ts
 
-**Nouvelles RLS anon** sur `budgets`, `budget_categories`, `budget_lines`, `payments`, `payment_budget_allocations` : SELECT autorisé si le budget est référencé par un `budget_share_links` actif (token vérifié côté client par edge function).
+Migration SQL :
+  - DROP + recreate des policies INSERT sur :
+      payment_budget_allocations, budget_insights, categorization_rules
+    pour autoriser tout utilisateur authentifié.
+  - Les policies ALL existantes sont remplacées par des policies séparées
+    SELECT (déjà ouvert) / INSERT (tout auth) / UPDATE+DELETE (admin/comptable).
+```
 
-**Edge functions** :
-- `export-budget` : génère PDF (jsPDF + autoTable) ou XLSX (xlsx package), retourne base64
-- `budget-insights` : appelle l'IA avec le contexte, valide la réponse via JSON schema, écrit dans `budget_insights`
-- `public-budget-view` : prend un token, retourne la vue agrégée (contourne les RLS via service role + vérif token)
+---
 
-**Frontend** :
-- `BudgetDetail.tsx` : 2 nouveaux boutons (Télécharger ▾, Partager), 1 carte "Conseils IA"
-- `src/pages/PublicBudget.tsx` (nouvelle route `/public/budget/:token`, hors AppLayout)
-- `src/hooks/useBudgetShares.ts`, `useBudgetInsights.ts`, `useBudgetExport.ts`
+## Hors scope
 
-**Pas de changement** sur l'imputation existante.
-
-## Hors scope (à confirmer)
-
-- Modification automatique des montants prévus par l'IA → **non** : l'IA propose, l'humain valide manuellement (sécurité comptable)
-- Notifications email au bailleur quand le budget est mis à jour → à voir plus tard
-- Multi-bailleurs avec vues filtrées par sous-budget → à voir plus tard
+- Pas de modification du schéma `budget_lines` / `budgets`.
+- Pas de changement sur l'export PDF/Excel ni sur la vue publique partagée.
+- Pas d'historisation supplémentaire des choix manuels (l'audit reste via `payment_versions` existant).
