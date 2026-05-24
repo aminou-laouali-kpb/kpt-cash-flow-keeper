@@ -371,7 +371,7 @@ export default function PaiementForm() {
                       {existingDocs.map(d => (
                         <li key={d.id} className="flex items-center gap-2 text-sm bg-muted rounded p-2">
                           <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          <a href={d.file_url} target="_blank" rel="noreferrer" className="flex-1 truncate underline">{d.file_name}</a>
+                          <SignedLink src={d.file_url} className="flex-1 truncate underline">{d.file_name}</SignedLink>
                           {d.type_piece === "justificatif_signature" && (
                             <span className="text-xs text-green-700">tient lieu de signature</span>
                           )}
