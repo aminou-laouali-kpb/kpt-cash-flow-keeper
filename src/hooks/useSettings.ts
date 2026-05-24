@@ -34,7 +34,13 @@ export function useSettings() {
         .limit(1)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        // Read-only users can't read settings_association directly (admin/comptable only).
+        // Fallback to the public header RPC for safe display fields.
+        const { data: pub } = await supabase.rpc("get_settings_public_header" as any);
+        if (pub) return pub as Settings;
+        throw error;
+      }
 
       if (!data) {
         const { data: newData, error: insertError } = await supabase
@@ -42,7 +48,11 @@ export function useSettings() {
           .insert({ nom: "Karaté Pour Tous (KPT)" })
           .select()
           .single();
-        if (insertError) throw insertError;
+        if (insertError) {
+          const { data: pub } = await supabase.rpc("get_settings_public_header" as any);
+          if (pub) return pub as Settings;
+          throw insertError;
+        }
         return newData as Settings;
       }
 
