@@ -65,13 +65,9 @@ export function useSignatureByToken(token: string | undefined) {
     queryKey: ["signature_request_token", token],
     queryFn: async () => {
       if (!token) return null;
-      const { data, error } = await supabase
-        .from("signature_requests")
-        .select("*, payments(*, projects(nom))")
-        .eq("token", token)
-        .single();
+      const { data, error } = await supabase.rpc("get_signature_request_by_token", { _token: token });
       if (error) throw error;
-      return data;
+      return data as any;
     },
     enabled: !!token,
   });
@@ -142,25 +138,12 @@ export function useSignatureActions() {
       signer_name: string;
       signature_image_url: string;
     }) => {
-      // Insert signature
-      const { error: sigError } = await supabase
-        .from("payment_signatures")
-        .insert({
-          payment_id: input.payment_id,
-          signer_type: "beneficiaire" as any,
-          signer_name: input.signer_name,
-          signature_image_url: input.signature_image_url,
-          signed_at: new Date().toISOString(),
-          is_valid: true,
-        });
-      if (sigError) throw sigError;
-
-      // Update request
-      const { error: reqError } = await supabase
-        .from("signature_requests")
-        .update({ status: "signed" as any, signed_at: new Date().toISOString() })
-        .eq("token", input.token);
-      if (reqError) throw reqError;
+      const { error } = await supabase.rpc("sign_payment_via_token", {
+        _token: input.token,
+        _signer_name: input.signer_name,
+        _signature_image_url: input.signature_image_url,
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
       toast({ title: "Signature enregistrée avec succès" });
@@ -170,10 +153,10 @@ export function useSignatureActions() {
 
   const refuseViaToken = useMutation({
     mutationFn: async (input: { token: string; reason: string }) => {
-      const { error } = await supabase
-        .from("signature_requests")
-        .update({ status: "refused" as any, refusal_reason: input.reason })
-        .eq("token", input.token);
+      const { error } = await supabase.rpc("refuse_signature_via_token", {
+        _token: input.token,
+        _reason: input.reason,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
