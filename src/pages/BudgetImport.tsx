@@ -33,11 +33,10 @@ export default function BudgetImport() {
       const path = `budgets/${projectId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
       const { error: upErr } = await supabase.storage.from("kpt-files").upload(path, file);
       if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage.from("kpt-files").getPublicUrl(path);
 
-      // Call edge function
+      // Bucket is private — pass the storage path; the edge function will download via service role.
       const { data, error } = await supabase.functions.invoke("import-budget", {
-        body: { project_id: projectId, file_url: urlData.publicUrl, file_name: file.name, taux_change_xof: taux },
+        body: { project_id: projectId, file_path: path, file_name: file.name, taux_change_xof: taux },
       });
       if (error) throw error;
 

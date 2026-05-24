@@ -77,8 +77,8 @@ export function useSettings() {
     const fileName = `${path}/${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("kpt-files").upload(fileName, file, { upsert: true });
     if (error) throw error;
-    const { data } = supabase.storage.from("kpt-files").getPublicUrl(fileName);
-    return data.publicUrl;
+    // Bucket is private — store the storage path; consumers sign on demand.
+    return fileName;
   };
 
   return {

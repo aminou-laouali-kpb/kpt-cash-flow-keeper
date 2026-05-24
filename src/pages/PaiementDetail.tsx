@@ -17,6 +17,8 @@ import { SendSignatureLink } from "@/components/SendSignatureLink";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { ManualAllocationDialog } from "@/components/ManualAllocationDialog";
+import { SignedImage } from "@/components/SignedImage";
+import { SignedLink } from "@/components/SignedLink";
 
 const categoryLabels: Record<string, string> = {
   fournitures: "Fournitures", transport: "Transport", restauration: "Restauration",
@@ -77,13 +79,13 @@ export default function PaiementDetail() {
     const blob = await (await fetch(dataUrl)).blob();
     const { error: uploadError } = await supabase.storage.from("kpt-files").upload(fileName, blob, { contentType: "image/png" });
     if (uploadError) throw uploadError;
-    const { data: urlData } = supabase.storage.from("kpt-files").getPublicUrl(fileName);
 
+    // Bucket is private — store the storage path; consumers sign on demand.
     await createSignature({
       payment_id: payment.id,
       signer_type: "beneficiaire",
       signer_name: name,
-      signature_image_url: urlData.publicUrl,
+      signature_image_url: fileName,
     });
   };
 
