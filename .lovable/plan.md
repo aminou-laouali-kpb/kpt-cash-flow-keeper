@@ -7,7 +7,7 @@ Or la table des rôles ne contient **qu'une seule ligne** : aminou@karatoupourto
 - idriss@karatoupourtous.org
 - laouali@karatoupourtous.org
 - chamsia@karatoupourtous.org
-- idrisslaouali@gmail.com
+- [adresse personnelle retirée]
 
 Cause racine : le rôle admin n'est attribué automatiquement qu'au tout premier utilisateur inscrit ; les comptes créés ensuite n'obtiennent aucun rôle et sont donc en lecture seule de fait.
 
@@ -15,7 +15,7 @@ Cause racine : le rôle admin n'est attribué automatiquement qu'au tout premier
 
 1. Ajouter les rôles manquants :
    - idriss@karatoupourtous.org → **admin**
-   - laouali@, chamsia@, idrisslaouali@gmail.com → **comptable**
+   - laouali@, chamsia@, [adresse personnelle retirée] → **comptable**
 2. Vérifier après coup que chaque compte a bien un rôle.
 
 ## Amélioration pour éviter que ça se reproduise
