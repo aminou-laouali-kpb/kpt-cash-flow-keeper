@@ -1,73 +1,50 @@
-# Welcome to your Lovable project
+# KPT Comptabilité
 
-## Project info
+Outil de gestion financière de l'association **KPT** (Karatou Pour Tous) : projets, budgets, paiements, pièces justificatives et circuit de signature.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Fonctionnalités
 
-## How can I edit this code?
+- **Projets et budgets** : création de projets, budgets par lignes et catégories, import de budgets depuis Excel.
+- **Paiements** : saisie, pièces jointes, historique des versions et répartition d'un paiement sur plusieurs lignes budgétaires.
+- **Signatures** : demandes de signature électronique et page de signature dédiée.
+- **Comptabilité** : tableau de bord, graphiques et exports PDF, Word et Excel.
+- **Catégorisation automatique** des dépenses et analyses budgétaires (fonctions Supabase).
+- **Partage public** d'un budget en lecture seule par lien.
+- **Rôles** : admin et comptable, invitations par e-mail, journal d'audit.
 
-There are several ways of editing your application.
+## Stack
 
-**Use Lovable**
+- React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui
+- Supabase : PostgreSQL avec RLS, Auth, Storage, Edge Functions
+- TanStack Query, React Hook Form, Zod, Recharts
+- jsPDF, docx, xlsx pour les exports
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Structure
 
-Changes made via Lovable will be committed automatically to this repo.
+```
+src/pages/            écrans (Projets, Budgets, Paiements, Comptabilité, Signature…)
+src/components/       composants UI
+supabase/migrations/  schéma de la base et règles RLS
+supabase/functions/   auto-categorize-batch, budget-insights, categorize-expense,
+                      import-budget, invite-user, public-budget-view
+```
 
-**Use your preferred IDE**
+## Démarrer en local
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Variables d'environnement (fichier `.env`) :
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+| Variable | Rôle |
+|---|---|
+| `VITE_SUPABASE_URL` | URL du projet Supabase |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | clé publique (anon) Supabase |
 
-**Use GitHub Codespaces**
+Les fonctions Supabase utilisent en plus `SUPABASE_SERVICE_ROLE_KEY` et `LOVABLE_API_KEY`, à définir dans les secrets Supabase, jamais dans le code.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Origine
 
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Projet créé avec [Lovable](https://lovable.dev) et maintenu par Karatou Pour Tous.
